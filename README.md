@@ -1,106 +1,75 @@
-# Wedding Derby
+# React + TypeScript + Vite
 
-結婚式の引き出物マルシェの順番決定を盛り上げるための、ゲスト参加型リアルタイムチーム競馬ゲームです。
+This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
 
-## Overview
+Currently, two official plugins are available:
 
-Wedding Derbyは、各テーブルを1つのチームとして扱い、ゲストがスマートフォンから参加できる競馬形式のゲームです。
+- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
+- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
 
-QRコードを読み取ることで専用ページへアクセスし、アプリのインストールなしで参加できます。
+## React Compiler
 
-各テーブルには1頭の馬が割り当てられ、ゲストの操作・運・イベント要素によって順位が決定します。
+The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
 
-## Purpose
+## Expanding the ESLint configuration
 
-本プロジェクトの目的は以下です。
+If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
 
-- 引き出物マルシェの選択順を楽しいイベント化する
-- ゲスト全員が参加できる仕組みを作る
-- テーブル間の交流を促進する
-- テーブル人数差による有利不利を抑える
+```js
+export default defineConfig([
+  globalIgnores(['dist']),
+  {
+    files: ['**/*.{ts,tsx}'],
+    extends: [
+      // Other configs...
 
-## Features
+      // Remove tseslint.configs.recommended and replace with this
+      tseslint.configs.recommendedTypeChecked,
+      // Alternatively, use this for stricter rules
+      tseslint.configs.strictTypeChecked,
+      // Optionally, add this for stylistic rules
+      tseslint.configs.stylisticTypeChecked,
 
-- QRコードによる簡単参加
-- スマートフォンのみで利用可能
-- Wi-Fiだけでなく4G / 5G環境でも利用可能
-- テーブル単位のチーム戦
-- リアルタイムレース演出
-- ゲスト操作による馬への影響
-- ランダムイベントによる逆転要素
-- 管理者によるゲーム開始・制御
+      // Other configs...
+    ],
+    languageOptions: {
+      parserOptions: {
+        project: ['./tsconfig.node.json', './tsconfig.app.json'],
+        tsconfigRootDir: import.meta.dirname,
+      },
+      // other options...
+    },
+  },
+])
 
-## Game Concept
+```
 
-各テーブルには1頭の馬が割り当てられます。
+You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
 
-ゲストは自分のスマートフォンから操作を行い、自分のチームの馬を応援します。
+```js
+// eslint.config.js
+import reactX from 'eslint-plugin-react-x'
+import reactDom from 'eslint-plugin-react-dom'
 
-馬の順位は以下の要素で決定されます。
+export default defineConfig([
+  globalIgnores(['dist']),
+  {
+    files: ['**/*.{ts,tsx}'],
+    extends: [
+      // Other configs...
+      // Enable lint rules for React
+      reactX.configs['recommended-typescript'],
+      // Enable lint rules for React DOM
+      reactDom.configs.recommended,
+    ],
+    languageOptions: {
+      parserOptions: {
+        project: ['./tsconfig.node.json', './tsconfig.app.json'],
+        tsconfigRootDir: import.meta.dirname,
+      },
+      // other options...
+    },
+  },
+])
 
-- ゲスト操作
-- チーム協力度
-- ランダムイベント
-- ボーナスイベント
-- 障害イベント
-
-人数が多いテーブルだけが勝ちやすくならないよう、個人操作の影響値は調整します。
-
-## Technology Stack
-
-使用予定技術：
-
-Frontend:
-- React
-- TypeScript
-
-Backend:
-- Firebase
-
-Database:
-- Firebase Firestore
-
-Hosting:
-- Firebase Hosting
-
-Version Control:
-- GitHub
-
-## Development Goal
-
-本プロジェクトは以下を目標とします。
-
-- GitHub公開可能な品質
-- 再利用可能な設計
-- 結婚式当日に安定稼働する構成
-- 開発者以外でも理解できるドキュメント整備
-
-## Project Structure
-
-Wedding Derby
-
-├── README.md
-├── PROJECT_OVERVIEW.md
-├── REQUIREMENTS.md
-├── GAME_DESIGN.md
-├── ARCHITECTURE.md
-├── FIREBASE_DESIGN.md
-├── UI_DESIGN.md
-├── DEVELOPMENT_GUIDE.md
-├── DEPLOYMENT_GUIDE.md
-├── OPERATION_MANUAL.md
-└── AI_PROMPT_BACKUP.md
-
-## Future Expansion
-
-今後の拡張案：
-
-- 複数レース対応
-- 写真イベント連携
-- 新郎新婦コメント演出
-- 景品抽選機能
-- 他イベントへの転用
-
----
-
-Created for wedding entertainment.
+```

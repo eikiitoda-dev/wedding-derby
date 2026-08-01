@@ -1,3 +1,4 @@
+import { useLocation } from "react-router-dom"
 import { useState } from "react"
 
 type Horse = {
@@ -6,80 +7,199 @@ type Horse = {
 }
 
 function GamePage() {
-  const [horses, setHorses] = useState<Horse[]>([
-    { name: "ホワイト号", progress: 0 },
-    { name: "ブラック号", progress: 0 },
-    { name: "ゴールド号", progress: 0 },
-  ])
+  const location = useLocation()
 
-  const [status, setStatus] = useState("待機中")
-  const [winner, setWinner] = useState("")
+  const playerName =
+    location.state?.playerName || "ゲスト"
+
+  const customHorseName =
+    location.state?.horseName || "ゲスト馬"
+
+  const initialHorses: Horse[] = [
+    {
+      name: customHorseName,
+      progress: 0,
+    },
+    {
+      name: "ホワイト号",
+      progress: 0,
+    },
+    {
+      name: "ブラック号",
+      progress: 0,
+    },
+  ]
+
+  const [horses, setHorses] =
+    useState<Horse[]>(initialHorses)
+
+  const [status, setStatus] =
+    useState("待機中")
+
+  const [ranking, setRanking] =
+    useState<string[]>([])
+
+  const [running, setRunning] =
+    useState(false)
+
 
   const startRace = () => {
+    if (running) return
+
+    setRanking([])
     setStatus("走行中")
-    setWinner("")
+    setRunning(true)
+
+    const finishOrder: string[] = []
 
     const timer = setInterval(() => {
       setHorses((current) => {
-        const updated = current.map((horse) => ({
-          ...horse,
-          progress: Math.min(
-            horse.progress + Math.floor(Math.random() * 10),
-            100
-          ),
-        }))
 
-        const finished = updated.find(
-          (horse) => horse.progress >= 100
-        )
+        const updated =
+          current.map((horse) => {
 
-        if (finished) {
+            if (horse.progress >= 100) {
+              return horse
+            }
+
+            return {
+              ...horse,
+              progress: Math.min(
+                horse.progress +
+                  Math.floor(Math.random() * 12),
+                100
+              ),
+            }
+          })
+
+
+        updated.forEach((horse) => {
+
+          if (
+            horse.progress >= 100 &&
+            !finishOrder.includes(horse.name)
+          ) {
+            finishOrder.push(horse.name)
+          }
+
+        })
+
+
+        if (
+          finishOrder.length ===
+          updated.length
+        ) {
           clearInterval(timer)
+
+          setRanking(finishOrder)
           setStatus("終了")
-          setWinner(`${finished.name} の勝利！`)
+          setRunning(false)
         }
+
 
         return updated
       })
+
     }, 500)
   }
 
-  const ranking = [...horses].sort(
-    (a, b) => b.progress - a.progress
-  )
 
   return (
     <div>
+
       <h1>🏇 Wedding Derby</h1>
 
-      <h2>現在順位</h2>
+      <h2>
+        参加者：{playerName}
+      </h2>
 
-      {ranking.map((horse, index) => (
-        <div key={horse.name}>
-          <p>
-            {index + 1}位 {horse.name}
-          </p>
 
-          <p>
-            {"█".repeat(Math.floor(horse.progress / 10))}
-            {"░".repeat(10 - Math.floor(horse.progress / 10))}
-            {" "}
-            {horse.progress}%
-          </p>
-        </div>
-      ))}
+      <h3>現在順位</h3>
 
-      <button onClick={startRace}>
-        レース開始
+
+      {[...horses]
+        .sort(
+          (a,b) =>
+            b.progress -
+            a.progress
+        )
+        .map(
+          (horse,index)=>(
+
+          <div key={horse.name}>
+
+            <p>
+              {index+1}位 🐎 {horse.name}
+            </p>
+
+            <p>
+              {"█".repeat(
+                Math.floor(
+                  horse.progress / 10
+                )
+              )}
+
+              {"░".repeat(
+                10 -
+                Math.floor(
+                  horse.progress / 10
+                )
+              )}
+
+              {horse.progress}%
+
+            </p>
+
+          </div>
+
+        ))}
+
+
+      <button
+        onClick={startRace}
+        disabled={running}
+      >
+        {running
+          ? "レース中..."
+          : "レース開始"}
       </button>
 
+
       <p>
-        レース状態：{status}
+        状態：{status}
       </p>
 
-      <h2>
-        {winner}
-      </h2>
+
+      {
+        ranking.length > 0 &&
+        <div>
+
+          <h2>
+            🏆 結果
+          </h2>
+
+
+          {
+            ranking.map(
+              (name,index)=>(
+
+              <p key={name}>
+                {index===0 && "🥇"}
+                {index===1 && "🥈"}
+                {index===2 && "🥉"}
+
+                {index+1}着：
+                {name}
+
+              </p>
+
+            ))
+          }
+
+
+        </div>
+      }
+
     </div>
   )
 }

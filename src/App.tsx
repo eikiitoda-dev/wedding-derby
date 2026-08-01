@@ -1,34 +1,49 @@
-import { BrowserRouter, Routes, Route } from "react-router-dom"
+import {
+  BrowserRouter,
+  Routes,
+  Route,
+} from "react-router-dom"
 
 import HomePage from "./pages/HomePage"
 import GamePage from "./pages/GamePage"
 import AdminPage from "./pages/AdminPage"
 
+import {
+  GameProvider,
+} from "./context/GameContext"
+
+
 function App() {
+
   return (
-    <BrowserRouter>
+    <GameProvider>
 
-      <Routes>
+      <BrowserRouter>
 
-        <Route
-          path="/"
-          element={<HomePage />}
-        />
+        <Routes>
 
-        <Route
-          path="/game"
-          element={<GamePage />}
-        />
+          <Route
+            path="/"
+            element={<HomePage />}
+          />
 
-        <Route
-          path="/admin"
-          element={<AdminPage />}
-        />
+          <Route
+            path="/game"
+            element={<GamePage />}
+          />
 
-      </Routes>
+          <Route
+            path="/admin"
+            element={<AdminPage />}
+          />
 
-    </BrowserRouter>
+        </Routes>
+
+      </BrowserRouter>
+
+    </GameProvider>
   )
 }
+
 
 export default App

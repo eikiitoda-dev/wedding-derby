@@ -1,3 +1,5 @@
+import { Link } from "react-router-dom"
+
 function HomePage() {
   return (
     <div>
@@ -7,9 +9,11 @@ function HomePage() {
         結婚式レースゲーム
       </p>
 
-      <button>
-        ゲーム開始
-      </button>
+      <Link to="/game">
+        <button>
+          ゲーム開始
+        </button>
+      </Link>
     </div>
   )
 }

@@ -20,8 +20,8 @@ function GamePage() {
     setWinner("")
 
     const timer = setInterval(() => {
-      setHorses((currentHorses) => {
-        const updated = currentHorses.map((horse) => ({
+      setHorses((current) => {
+        const updated = current.map((horse) => ({
           ...horse,
           progress: Math.min(
             horse.progress + Math.floor(Math.random() * 10),
@@ -44,20 +44,27 @@ function GamePage() {
     }, 500)
   }
 
+  const ranking = [...horses].sort(
+    (a, b) => b.progress - a.progress
+  )
+
   return (
     <div>
       <h1>🏇 Wedding Derby</h1>
 
-      <h2>第1レース</h2>
+      <h2>現在順位</h2>
 
-      {horses.map((horse) => (
+      {ranking.map((horse, index) => (
         <div key={horse.name}>
           <p>
-            🐎 {horse.name}
+            {index + 1}位 {horse.name}
           </p>
 
           <p>
-            進行度：{horse.progress}%
+            {"█".repeat(Math.floor(horse.progress / 10))}
+            {"░".repeat(10 - Math.floor(horse.progress / 10))}
+            {" "}
+            {horse.progress}%
           </p>
         </div>
       ))}

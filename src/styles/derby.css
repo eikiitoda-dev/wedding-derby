@@ -1,0 +1,169 @@
+body {
+
+margin:0;
+
+font-family:
+"Noto Sans JP",
+sans-serif;
+
+background:
+linear-gradient(
+135deg,
+#fff8e7,
+#ffe0ec
+);
+
+}
+
+
+
+.derby-container {
+
+min-height:100vh;
+
+padding:40px 20px;
+
+text-align:center;
+
+}
+
+
+
+.title {
+
+font-size:48px;
+
+color:#c2185b;
+
+}
+
+
+
+.card {
+
+background:white;
+
+max-width:700px;
+
+margin:30px auto;
+
+padding:30px;
+
+border-radius:30px;
+
+box-shadow:
+0 10px 30px
+rgba(0,0,0,.15);
+
+}
+
+
+
+.horse {
+
+background:white;
+
+max-width:800px;
+
+margin:25px auto;
+
+padding:25px;
+
+border-radius:25px;
+
+}
+
+
+
+.track {
+
+height:80px;
+
+background:#8bc34a;
+
+border-radius:40px;
+
+position:relative;
+
+overflow:hidden;
+
+}
+
+
+
+.runner {
+
+position:absolute;
+
+top:15px;
+
+font-size:45px;
+
+transition:
+left .4s linear;
+
+}
+
+
+
+.horse-runner {
+
+display:inline-block;
+
+/*
+絵文字を左右反転
+頭を右向きへ
+*/
+
+transform:
+scaleX(-1);
+
+}
+
+
+
+.goal {
+
+position:absolute;
+
+right:15px;
+
+top:15px;
+
+font-size:45px;
+
+}
+
+
+
+.result {
+
+margin:40px auto;
+
+background:#fff3cd;
+
+padding:40px;
+
+border-radius:35px;
+
+}
+
+
+
+.winner {
+
+font-size:50px;
+
+color:#d4a000;
+
+}
+
+
+
+.confetti {
+
+font-size:45px;
+
+}
+
+

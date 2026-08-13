@@ -1,2237 +1,2574 @@
 import {
   useEffect,
+  useMemo,
   useRef,
   useState,
-} from "react"
+} from "react";
 
 import {
   collection,
   doc,
   getDocs,
   updateDoc,
-} from "firebase/firestore"
+} from "firebase/firestore";
 
 import {
   useGame,
-} from "../context/GameContext"
+} from "../context/GameContext";
 
 import {
   subscribePlayers,
   subscribeRaceStarted,
-  setRaceEvent,
   type Player,
-} from "../firebase/gameService"
+} from "../firebase/gameService";
 
 import {
   db,
-} from "../firebase"
+} from "../firebase";
 
-import "../styles/derby.css"
+type HorseData = {
+  tableNumber: number;
+  horseName: string;
+  averageScore: number;
+  playerCount: number;
+};
 
+type RaceMotion = {
+  tableNumber: number;
+  progress: number;
+  finished: boolean;
+  seed: number;
+};
 
-type TableHorse = {
-  tableNumber: number
-  horseName: string
-  totalScore: number
-  averageScore: number
-  memberCount: number
-}
+const HORSE_COLORS = [
+  "#f7f7f7",
+  "#222222",
+  "#d92d2d",
+  "#2767c7",
+  "#f0c629",
+  "#41a45b",
+  "#e8812e",
+  "#e96cae",
+  "#7b59c7",
+  "#2aa7a1",
+  "#b46b37",
+];
 
-
-type HorsePosition = {
-  [tableNumber: number]: number
-}
-
-
-const SILK_COLORS = [
-  "#e53935",
-  "#1e88e5",
-  "#fdd835",
-  "#43a047",
-  "#8e24aa",
-  "#fb8c00",
-  "#00acc1",
-  "#d81b60",
-]
-
+const BASE_SPEED = 100 / 90;
 
 function clamp(
   value: number,
-  minimum: number,
-  maximum: number
+  min: number,
+  max: number
 ) {
-
-  return Math.min(
-    Math.max(
-      value,
-      minimum
-    ),
-    maximum
-  )
-
+  return Math.max(
+    min,
+    Math.min(max, value)
+  );
 }
 
-
-function wrap(
-  value: number,
-  size: number
-) {
-
-  return (
-    (
-      value % size
-    ) + size
-  ) % size
-
-}
-
-
-/*
- * 競走馬＋騎手
- */
-
-function RaceHorse({
-  silkColor,
-  finished,
-  leader,
-}: {
-  silkColor: string
+async function setAllPlayersFinished(
   finished: boolean
-  leader: boolean
-}) {
-
-  return (
-
-    <svg
-      viewBox="0 0 180 120"
-      width={
-        leader
-          ? 150
-          : 138
-      }
-      height={
-        leader
-          ? 100
-          : 92
-      }
-      style={{
-        display: "block",
-        overflow: "visible",
-        filter:
-          leader
-            ? "drop-shadow(0 0 8px rgba(255,215,0,.8)) drop-shadow(0 7px 4px rgba(0,0,0,.38))"
-            : "drop-shadow(0 7px 4px rgba(0,0,0,.38))",
-      }}
-    >
-
-      {/*
-       * 馬の尻尾
-       */}
-
-      <path
-        d="M35 54 C11 49 7 63 17 72 C26 74 31 67 38 61"
-        fill="none"
-        stroke="#25160f"
-        strokeWidth="7"
-        strokeLinecap="round"
-      />
-
-
-      {/*
-       * 胴体
-       */}
-
-      <ellipse
-        cx="78"
-        cy="59"
-        rx="46"
-        ry="28"
-        fill="#704524"
-      />
-
-
-      {/*
-       * 胸
-       */}
-
-      <ellipse
-        cx="108"
-        cy="55"
-        rx="23"
-        ry="24"
-        fill="#744826"
-      />
-
-
-      {/*
-       * 首
-       */}
-
-      <path
-        d="M104 50 C112 34 117 20 131 13 C143 7 153 14 148 25 L127 56 Z"
-        fill="#754827"
-      />
-
-
-      {/*
-       * たてがみ
-       */}
-
-      <path
-        d="M126 17 C116 23 112 34 108 47 L116 51 C121 39 126 27 137 19 Z"
-        fill="#21130d"
-      />
-
-
-      {/*
-       * 頭
-       */}
-
-      <path
-        d="M132 12 C148 5 166 13 172 23 C164 31 151 32 139 26 L126 21 Z"
-        fill="#79502c"
-      />
-
-
-      {/*
-       * 耳
-       */}
-
-      <path
-        d="M137 13 L133 1 L144 11 Z"
-        fill="#4d2d19"
-      />
-
-      <path
-        d="M149 12 L154 2 L158 15 Z"
-        fill="#4d2d19"
-      />
-
-
-      {/*
-       * 目
-       */}
-
-      <circle
-        cx="158"
-        cy="19"
-        r="2.5"
-        fill="#111"
-      />
-
-
-      {/*
-       * 鼻
-       */}
-
-      <circle
-        cx="169"
-        cy="25"
-        r="2"
-        fill="#20130d"
-      />
-
-
-      {/*
-       * 後脚1
-       */}
-
-      <g
-        className={
-          finished
-            ? ""
-            : "horse-leg-back-a"
-        }
-        style={{
-          transformOrigin:
-            "57px 72px",
-        }}
-      >
-
-        <path
-          d="M59 70 C52 81 44 92 34 103"
-          fill="none"
-          stroke="#5d381e"
-          strokeWidth="10"
-          strokeLinecap="round"
-        />
-
-        <path
-          d="M34 103 L23 107"
-          fill="none"
-          stroke="#23150e"
-          strokeWidth="6"
-          strokeLinecap="round"
-        />
-
-      </g>
-
-
-      {/*
-       * 後脚2
-       */}
-
-      <g
-        className={
-          finished
-            ? ""
-            : "horse-leg-back-b"
-        }
-        style={{
-          transformOrigin:
-            "73px 73px",
-        }}
-      >
-
-        <path
-          d="M74 72 C70 85 67 96 68 108"
-          fill="none"
-          stroke="#684023"
-          strokeWidth="10"
-          strokeLinecap="round"
-        />
-
-        <path
-          d="M68 108 L77 111"
-          fill="none"
-          stroke="#23150e"
-          strokeWidth="6"
-          strokeLinecap="round"
-        />
-
-      </g>
-
-
-      {/*
-       * 前脚1
-       */}
-
-      <g
-        className={
-          finished
-            ? ""
-            : "horse-leg-front-a"
-        }
-        style={{
-          transformOrigin:
-            "108px 70px",
-        }}
-      >
-
-        <path
-          d="M107 69 C114 82 122 94 135 103"
-          fill="none"
-          stroke="#654022"
-          strokeWidth="9"
-          strokeLinecap="round"
-        />
-
-        <path
-          d="M135 103 L146 101"
-          fill="none"
-          stroke="#23150e"
-          strokeWidth="6"
-          strokeLinecap="round"
-        />
-
-      </g>
-
-
-      {/*
-       * 前脚2
-       */}
-
-      <g
-        className={
-          finished
-            ? ""
-            : "horse-leg-front-b"
-        }
-        style={{
-          transformOrigin:
-            "119px 67px",
-        }}
-      >
-
-        <path
-          d="M118 67 C119 82 116 95 111 108"
-          fill="none"
-          stroke="#754827"
-          strokeWidth="9"
-          strokeLinecap="round"
-        />
-
-        <path
-          d="M111 108 L120 112"
-          fill="none"
-          stroke="#23150e"
-          strokeWidth="6"
-          strokeLinecap="round"
-        />
-
-      </g>
-
-
-      {/*
-       * 鞍
-       */}
-
-      <path
-        d="M68 37 C82 30 102 32 111 43 L104 54 C91 47 78 47 66 51 Z"
-        fill="#202020"
-      />
-
-
-      {/*
-       * 騎手の脚
-       */}
-
-      <path
-        d="M92 37 L105 59"
-        fill="none"
-        stroke="#f4f4f4"
-        strokeWidth="7"
-        strokeLinecap="round"
-      />
-
-
-      {/*
-       * 騎手の胴
-       */}
-
-      <path
-        d="M78 13 C92 11 102 18 105 30 L96 42 L80 35 Z"
-        fill={silkColor}
-      />
-
-
-      {/*
-       * 騎手の腕
-       */}
-
-      <path
-        d="M96 22 L119 33"
-        fill="none"
-        stroke={silkColor}
-        strokeWidth="7"
-        strokeLinecap="round"
-      />
-
-
-      {/*
-       * 騎手の頭
-       */}
-
-      <circle
-        cx="78"
-        cy="10"
-        r="9"
-        fill="#efc39c"
-      />
-
-
-      {/*
-       * ヘルメット
-       */}
-
-      <path
-        d="M68 8 C71 -3 85 -5 90 6 L90 10 L68 10 Z"
-        fill={silkColor}
-      />
-
-
-      {/*
-       * 手綱
-       */}
-
-      <path
-        d="M117 32 C126 32 137 28 146 25"
-        fill="none"
-        stroke="#2a1910"
-        strokeWidth="2"
-      />
-
-    </svg>
-
-  )
-
+) {
+  try {
+    const snapshot =
+      await getDocs(
+        collection(
+          db,
+          "players"
+        )
+      );
+
+    await Promise.all(
+      snapshot.docs.map(
+        playerDoc =>
+          updateDoc(
+            doc(
+              db,
+              "players",
+              playerDoc.id
+            ),
+            {
+              finished,
+            }
+          )
+      )
+    );
+  } catch (error) {
+    console.error(
+      "finished初期化エラー",
+      error
+    );
+  }
 }
 
+async function finishTable(
+  tableNumber: number
+) {
+  try {
+    const snapshot =
+      await getDocs(
+        collection(
+          db,
+          "players"
+        )
+      );
+
+    const targets =
+      snapshot.docs.filter(
+        playerDoc =>
+          (
+            playerDoc.data()
+              .tableNumber ?? 0
+          ) === tableNumber
+      );
+
+    await Promise.all(
+      targets.map(
+        playerDoc =>
+          updateDoc(
+            doc(
+              db,
+              "players",
+              playerDoc.id
+            ),
+            {
+              finished: true,
+            }
+          )
+      )
+    );
+  } catch (error) {
+    console.error(
+      "ゴール処理エラー",
+      error
+    );
+  }
+}
 
 function GamePage() {
-
   const {
     eventInfo,
-  } = useGame()
+  } = useGame();
 
+  const canvasRef =
+    useRef<HTMLCanvasElement | null>(
+      null
+    );
+
+  const horsesRef =
+    useRef<HorseData[]>([]);
+
+  const motionsRef =
+    useRef<RaceMotion[]>([]);
+
+  const animationRef =
+    useRef<number | null>(null);
+
+  const lastTimeRef =
+    useRef<number | null>(null);
+
+  const elapsedRef =
+    useRef(0);
+
+  const finishedSentRef =
+    useRef<Set<number>>(
+      new Set()
+    );
 
   const [
     players,
     setPlayers,
-  ] = useState<Player[]>([])
-
+  ] = useState<Player[]>([]);
 
   const [
     raceStarted,
     setRaceStarted,
-  ] = useState(false)
+  ] = useState(false);
 
+  const [
+    raceId,
+    setRaceId,
+  ] = useState(0);
 
   const [
     count,
     setCount,
-  ] = useState(3)
-
+  ] = useState(3);
 
   const [
-    positions,
-    setPositions,
-  ] = useState<HorsePosition>({})
+    ranking,
+    setRanking,
+  ] = useState<number[]>([]);
 
-
-  const raceTimerRef =
-    useRef<number | null>(null)
-
-
-  const eventTimerRef =
-    useRef<number | null>(null)
-
-
-  const eventEndTimerRef =
-    useRef<number | null>(null)
-
-
-  const eventCountRef =
-    useRef(0)
-
-
-  const finishedTablesRef =
-    useRef<Set<number>>(
-      new Set()
-    )
-
-
-  /*
-   * 参加者監視
-   */
-
-  useEffect(() => {
-
-    return subscribePlayers(
-      setPlayers
-    )
-
-  }, [])
-
-
-  /*
-   * レース状態監視
-   */
-
-  useEffect(() => {
-
-    return subscribeRaceStarted(
-      setRaceStarted
-    )
-
-  }, [])
-
-
-  /*
-   * 卓単位にまとめる
-   */
-
-  const tableMap =
-    new Map<number, TableHorse>()
-
-
-  players.forEach(
-    player => {
-
-      const tableNumber =
-        player.tableNumber ?? 0
-
-
-      if (!tableNumber) {
-        return
-      }
-
-
-      const existing =
-        tableMap.get(
-          tableNumber
-        )
-
-
-      if (existing) {
-
-        existing.totalScore +=
-          player.score ?? 0
-
-        existing.memberCount +=
-          1
-
-      } else {
-
-        tableMap.set(
-          tableNumber,
+  const horses =
+    useMemo(() => {
+      const grouped =
+        new Map<
+          number,
           {
-
-            tableNumber,
-
-            horseName:
-              player.horseName,
-
-            totalScore:
-              player.score ?? 0,
-
-            averageScore:
-              player.score ?? 0,
-
-            memberCount:
-              1,
-
+            horseName: string;
+            totalScore: number;
+            playerCount: number;
           }
-        )
+        >();
 
-      }
+      players.forEach(
+        player => {
+          const tableNumber =
+            Number(
+              player.tableNumber ?? 0
+            );
 
-    }
-  )
+          if (
+            !Number.isFinite(
+              tableNumber
+            ) ||
+            tableNumber <= 0
+          ) {
+            return;
+          }
 
+          const existing =
+            grouped.get(
+              tableNumber
+            );
 
-  const tableHorses =
-    Array.from(
-      tableMap.values()
-    ).map(
-      horse => ({
+          if (existing) {
+            existing.totalScore +=
+              Number(
+                player.score ?? 0
+              );
 
-        ...horse,
-
-        averageScore:
-          horse.memberCount > 0
-            ? horse.totalScore /
-              horse.memberCount
-            : 0,
-
-      })
-    )
-
-
-  /*
-   * ゴールした卓の参加者をロック
-   */
-
-  const finishTable =
-    async (
-      tableNumber: number
-    ) => {
-
-      if (
-        finishedTablesRef.current.has(
-          tableNumber
-        )
-      ) {
-
-        return
-
-      }
-
-
-      finishedTablesRef.current.add(
-        tableNumber
-      )
-
-
-      try {
-
-        const snapshot =
-          await getDocs(
-            collection(
-              db,
-              "players"
-            )
-          )
-
-
-        const targets =
-          snapshot.docs.filter(
-            playerDocument => {
-
-              const data =
-                playerDocument.data()
-
-
-              return (
-                data.tableNumber ===
-                tableNumber
-              )
-
-            }
-          )
-
-
-        await Promise.all(
-
-          targets.map(
-            playerDocument =>
-
-              updateDoc(
-                doc(
-                  db,
-                  "players",
-                  playerDocument.id
-                ),
-                {
-                  finished:
-                    true,
-                }
-              )
-
-          )
-
-        )
-
-      } catch (error) {
-
-        console.error(
-          "ゴールロックエラー",
-          error
-        )
-
-      }
-
-    }
-
-
-  /*
-   * レース開始
-   */
-
-  useEffect(() => {
-
-    if (!raceStarted) {
-
-      setCount(3)
-
-      setPositions({})
-
-      finishedTablesRef.current =
-        new Set()
-
-      return
-
-    }
-
-
-    setCount(3)
-
-    setPositions({})
-
-    finishedTablesRef.current =
-      new Set()
-
-
-    const timer =
-      window.setInterval(() => {
-
-        setCount(
-          previous => {
+            existing.playerCount += 1;
 
             if (
-              previous <= 1
+              !existing.horseName &&
+              player.horseName
             ) {
-
-              window.clearInterval(
-                timer
-              )
-
-              return 0
-
+              existing.horseName =
+                player.horseName;
             }
-
-
-            return (
-              previous - 1
-            )
-
+          } else {
+            grouped.set(
+              tableNumber,
+              {
+                horseName:
+                  player.horseName ||
+                  `${tableNumber}卓`,
+                totalScore:
+                  Number(
+                    player.score ?? 0
+                  ),
+                playerCount: 1,
+              }
+            );
           }
-        )
+        }
+      );
 
-      }, 1000)
-
-
-    return () => {
-
-      window.clearInterval(
-        timer
+      return Array.from(
+        grouped.entries()
       )
-
-    }
-
-  }, [
-    raceStarted,
-  ])
-
-
-  /*
-   * 自動走行
-   *
-   * 約90秒を基本に、
-   * ポイントで速度差をつける。
-   */
+        .map(
+          ([
+            tableNumber,
+            data,
+          ]) => ({
+            tableNumber,
+            horseName:
+              data.horseName,
+            averageScore:
+              data.playerCount > 0
+                ? data.totalScore /
+                  data.playerCount
+                : 0,
+            playerCount:
+              data.playerCount,
+          })
+        )
+        .sort(
+          (a, b) =>
+            a.tableNumber -
+            b.tableNumber
+        );
+    }, [players]);
 
   useEffect(() => {
+    horsesRef.current =
+      horses;
+  }, [horses]);
 
+  useEffect(() => {
+    return subscribePlayers(
+      setPlayers
+    );
+  }, []);
+
+  useEffect(() => {
+    return subscribeRaceStarted(
+      (
+        started,
+        newRaceId
+      ) => {
+        setRaceStarted(
+          started
+        );
+
+        setRaceId(
+          newRaceId
+        );
+      }
+    );
+  }, []);
+
+  useEffect(() => {
+    if (!raceStarted) {
+      setCount(3);
+      setRanking([]);
+
+      motionsRef.current =
+        [];
+
+      finishedSentRef.current =
+        new Set();
+
+      elapsedRef.current = 0;
+      lastTimeRef.current =
+        null;
+
+      return;
+    }
+
+    setCount(3);
+    setRanking([]);
+
+    motionsRef.current =
+      [];
+
+    finishedSentRef.current =
+      new Set();
+
+    elapsedRef.current = 0;
+    lastTimeRef.current =
+      null;
+
+    setAllPlayersFinished(
+      false
+    );
+
+    let current = 3;
+
+    const timer =
+      window.setInterval(
+        () => {
+          current -= 1;
+
+          setCount(
+            Math.max(
+              current,
+              0
+            )
+          );
+
+          if (current <= 0) {
+            window.clearInterval(
+              timer
+            );
+          }
+        },
+        1000
+      );
+
+    return () => {
+      window.clearInterval(
+        timer
+      );
+    };
+  }, [
+    raceStarted,
+    raceId,
+  ]);
+
+  useEffect(() => {
     if (
       !raceStarted ||
       count !== 0 ||
-      tableHorses.length === 0
+      horses.length === 0
     ) {
-
-      return
-
+      return;
     }
-
-
-    raceTimerRef.current =
-      window.setInterval(() => {
-
-        setPositions(
-          previous => {
-
-            const next = {
-              ...previous,
-            }
-
-
-            tableHorses.forEach(
-              horse => {
-
-                const current =
-                  next[
-                    horse.tableNumber
-                  ] ?? 0
-
-
-                if (
-                  current >= 100
-                ) {
-
-                  return
-
-                }
-
-
-                /*
-                 * 何もしなくても進む
-                 */
-
-                const baseSpeed =
-                  0.105
-
-
-                /*
-                 * ムチのポイントで加速。
-                 *
-                 * マイナス点なら
-                 * 通常より遅くなる。
-                 */
-
-                const scoreEffect =
-                  clamp(
-                    horse.averageScore *
-                      0.0003,
-                    -0.025,
-                    0.03
-                  )
-
-
-                const speed =
-                  Math.max(
-                    baseSpeed +
-                    scoreEffect,
-                    0.065
-                  )
-
-
-                const nextPosition =
-                  Math.min(
-                    current +
-                    speed,
-                    100
-                  )
-
-
-                next[
-                  horse.tableNumber
-                ] =
-                  nextPosition
-
-
-                if (
-                  nextPosition >= 100
-                ) {
-
-                  void finishTable(
-                    horse.tableNumber
-                  )
-
-                }
-
-              }
-            )
-
-
-            return next
-
-          }
-        )
-
-      }, 100)
-
-
-    return () => {
-
-      if (
-        raceTimerRef.current !== null
-      ) {
-
-        window.clearInterval(
-          raceTimerRef.current
-        )
-
-        raceTimerRef.current =
-          null
-
-      }
-
-    }
-
-  }, [
-    raceStarted,
-    count,
-    players,
-  ])
-
-
-  /*
-   * バナナイベント
-   *
-   * スクリーンには表示しない。
-   * 参加者画面だけに送る。
-   */
-
-  useEffect(() => {
-
-    if (!raceStarted) {
-
-      if (
-        eventTimerRef.current !== null
-      ) {
-
-        window.clearTimeout(
-          eventTimerRef.current
-        )
-
-      }
-
-
-      if (
-        eventEndTimerRef.current !== null
-      ) {
-
-        window.clearTimeout(
-          eventEndTimerRef.current
-        )
-
-      }
-
-
-      eventTimerRef.current =
-        null
-
-      eventEndTimerRef.current =
-        null
-
-      eventCountRef.current =
-        0
-
-
-      return
-
-    }
-
 
     if (
-      count !== 0
+      motionsRef.current
+        .length === 0
     ) {
-
-      return
-
+      motionsRef.current =
+        horses.map(
+          horse => ({
+            tableNumber:
+              horse.tableNumber,
+            progress: 0,
+            finished: false,
+            seed:
+              horse.tableNumber *
+              1.731,
+          })
+        );
     }
 
+    lastTimeRef.current =
+      performance.now();
 
-    let cancelled =
-      false
-
-
-    const scheduleNextEvent =
-      () => {
-
-        if (
-          cancelled ||
-          eventCountRef.current >= 4
-        ) {
-
-          return
-
-        }
-
-
-        const delay =
-          7000 +
-          Math.random() *
-            9000
-
-
-        eventTimerRef.current =
-          window.setTimeout(
-            async () => {
-
-              if (cancelled) {
-                return
-              }
-
-
-              eventCountRef.current +=
-                1
-
-
-              const eventId =
-                Date.now()
-
-
-              try {
-
-                await setRaceEvent({
-
-                  type:
-                    "trap",
-
-                  eventId,
-
-                  expiresAt:
-                    Date.now() +
-                    5000,
-
-                })
-
-              } catch (error) {
-
-                console.error(
-                  "バナナ発生エラー",
-                  error
-                )
-
-              }
-
-
-              eventEndTimerRef.current =
-                window.setTimeout(
-                  async () => {
-
-                    if (
-                      cancelled
-                    ) {
-
-                      return
-
-                    }
-
-
-                    try {
-
-                      await setRaceEvent({
-
-                        type:
-                          "none",
-
-                        eventId,
-
-                        expiresAt:
-                          0,
-
-                      })
-
-                    } catch (error) {
-
-                      console.error(
-                        "バナナ終了エラー",
-                        error
-                      )
-
-                    }
-
-
-                    scheduleNextEvent()
-
-                  },
-                  5000
-                )
-
-            },
-            delay
-          )
-
-      }
-
-
-    scheduleNextEvent()
-
+    elapsedRef.current = 0;
 
     return () => {
-
-      cancelled =
-        true
-
-
       if (
-        eventTimerRef.current !== null
+        animationRef.current !==
+        null
       ) {
+        cancelAnimationFrame(
+          animationRef.current
+        );
 
-        window.clearTimeout(
-          eventTimerRef.current
-        )
-
+        animationRef.current =
+          null;
       }
-
-
-      if (
-        eventEndTimerRef.current !== null
-      ) {
-
-        window.clearTimeout(
-          eventEndTimerRef.current
-        )
-
-      }
-
-    }
-
+    };
   }, [
     raceStarted,
     count,
-  ])
-
-
-  /*
-   * 待機
-   */
-
-  if (
-    !raceStarted
-  ) {
-
-    return (
-
-      <div
-        style={{
-          width:
-            "100vw",
-          height:
-            "100vh",
-          background:
-            "linear-gradient(135deg,#06130b,#173b26)",
-          color:
-            "white",
-          display:
-            "flex",
-          alignItems:
-            "center",
-          justifyContent:
-            "center",
-          textAlign:
-            "center",
-        }}
-      >
-
-        <div>
-
-          <div
-            style={{
-              fontSize:
-                "90px",
-            }}
-          >
-            🏇
-          </div>
-
-
-          <h1
-            style={{
-              fontSize:
-                "44px",
-            }}
-          >
-            {eventInfo.title}
-          </h1>
-
-
-          <h2>
-            {eventInfo.groom}
-            {" × "}
-            {eventInfo.bride}
-          </h2>
-
-
-          <p
-            style={{
-              fontSize:
-                "21px",
-              opacity:
-                0.75,
-            }}
-          >
-            レース開始をお待ちください
-          </p>
-
-        </div>
-
-      </div>
-
-    )
-
-  }
-
-
-  /*
-   * カウントダウン
-   */
-
-  if (
-    count > 0
-  ) {
-
-    return (
-
-      <div
-        style={{
-          width:
-            "100vw",
-          height:
-            "100vh",
-          background:
-            "radial-gradient(circle,#315d42,#051109)",
-          color:
-            "white",
-          display:
-            "flex",
-          flexDirection:
-            "column",
-          alignItems:
-            "center",
-          justifyContent:
-            "center",
-        }}
-      >
-
-        <div
-          style={{
-            fontSize:
-              "180px",
-            fontWeight:
-              900,
-            lineHeight:
-              1,
-          }}
-        >
-          {count}
-        </div>
-
-
-        <h1>
-          🏇 まもなくスタート
-        </h1>
-
-      </div>
-
-    )
-
-  }
-
-
-  /*
-   * 先頭位置＝カメラの基準
-   */
-
-  const leaderPosition =
-    tableHorses.reduce(
-      (
-        maximum,
-        horse
-      ) => {
-
-        return Math.max(
-          maximum,
-          positions[
-            horse.tableNumber
-          ] ?? 0
-        )
-
-      },
-      0
-    )
-
-
-  /*
-   * ゴール板の画面位置
-   *
-   * 終盤になると
-   * 右から画面に入ってくる。
-   */
-
-  const finishScreenX =
-    45 +
-    (
-      100 -
-      leaderPosition
-    ) * 4.6
-
-
-  /*
-   * 背景の流れ
-   */
-
-  const sceneryOffset =
-    leaderPosition *
-    2.6
-
-
-  return (
-
-    <div
-      style={{
-        width:
-          "100vw",
-        height:
-          "100vh",
-        overflow:
-          "hidden",
-        position:
-          "relative",
-        background:
-          "#52a9dd",
-        color:
-          "white",
-        fontFamily:
-          "Arial, Helvetica, sans-serif",
-      }}
-    >
-
-      {/*
-       * =====================================
-       * 空
-       * =====================================
-       */}
-
-      <div
-        style={{
-          position:
-            "absolute",
-          inset:
-            0,
-          height:
-            "45%",
-          background:
-            "linear-gradient(180deg,#42a6e1,#bce8fa)",
-        }}
-      />
-
-
-      {/*
-       * 山・遠景
-       */}
-
-      <div
-        style={{
-          position:
-            "absolute",
-          left:
-            0,
-          right:
-            0,
-          top:
-            "24%",
-          height:
-            "20%",
-          background:
-            "linear-gradient(155deg,transparent 0 16%,#638c63 16% 27%,transparent 27% 34%,#487a51 34% 48%,transparent 48% 58%,#5b895b 58% 72%,transparent 72%)",
-          opacity:
-            0.72,
-        }}
-      />
-
-
-      {/*
-       * =====================================
-       * 観客席
-       * =====================================
-       */}
-
-      <div
-        style={{
-          position:
-            "absolute",
-          left:
-            0,
-          right:
-            0,
-          top:
-            "36%",
-          height:
-            "15%",
-          background:
-            "linear-gradient(180deg,#d8d8d8 0%,#777 18%,#353535 25%,#202020 100%)",
-          borderTop:
-            "5px solid white",
-          zIndex:
-            2,
-        }}
-      >
-
-        <div
-          style={{
-            position:
-              "absolute",
-            inset:
-              "22px 0 0",
-            backgroundPositionX:
-              `${-sceneryOffset * 5}px`,
-            backgroundImage:
-              "radial-gradient(circle,#f4d0a5 0 2px,transparent 3px)",
-            backgroundSize:
-              "13px 10px",
-            opacity:
-              0.85,
-          }}
-        />
-
-      </div>
-
-
-      {/*
-       * =====================================
-       * 芝
-       * =====================================
-       */}
-
-      <div
-        style={{
-          position:
-            "absolute",
-          left:
-            0,
-          right:
-            0,
-          top:
-            "50%",
-          bottom:
-            0,
-          background:
-            "linear-gradient(180deg,#349a45,#16742d)",
-        }}
-      />
-
-
-      <div
-        style={{
-          position:
-            "absolute",
-          left:
-            0,
-          right:
-            0,
-          top:
-            "50%",
-          bottom:
-            0,
-          opacity:
-            0.16,
-          backgroundPositionX:
-            `${-sceneryOffset * 22}px`,
-          backgroundImage:
-            "linear-gradient(90deg,rgba(255,255,255,.22) 0 45px,transparent 45px 90px)",
-          backgroundSize:
-            "90px 100%",
-        }}
-      />
-
-
-      {/*
-       * =====================================
-       * 外ラチ
-       * =====================================
-       */}
-
-      <div
-        style={{
-          position:
-            "absolute",
-          left:
-            0,
-          right:
-            0,
-          top:
-            "51%",
-          height:
-            "8px",
-          background:
-            "#f8f8f8",
-          boxShadow:
-            "0 4px 5px rgba(0,0,0,.35)",
-          zIndex:
-            8,
-        }}
-      />
-
-
-      {/*
-       * ラチの支柱を流す
-       */}
-
-      {
-        Array.from(
-          { length: 15 },
-          (
-            _,
-            index
-          ) => {
-
-            const base =
-              index * 9
-
-
-            const x =
-              wrap(
-                base -
-                sceneryOffset,
-                125
-              ) - 10
-
-
-            return (
-
-              <div
-                key={
-                  `rail-${index}`
-                }
-                style={{
-                  position:
-                    "absolute",
-                  left:
-                    `${x}%`,
-                  top:
-                    "51%",
-                  width:
-                    "6px",
-                  height:
-                    "80px",
-                  background:
-                    "#f0f0f0",
-                  transform:
-                    "skewX(-8deg)",
-                  boxShadow:
-                    "2px 3px 3px rgba(0,0,0,.2)",
-                  zIndex:
-                    7,
-                }}
-              />
-
-            )
-
-          }
-        )
+    horses.length,
+  ]);
+
+  useEffect(() => {
+    const canvas =
+      canvasRef.current;
+
+    if (!canvas) {
+      return;
+    }
+
+    const context =
+      canvas.getContext(
+        "2d"
+      );
+
+    if (!context) {
+      return;
+    }
+
+    let disposed = false;
+
+    function resizeCanvas() {
+      const rect =
+        canvas.getBoundingClientRect();
+
+      const dpr =
+        Math.min(
+          window.devicePixelRatio ||
+            1,
+          2
+        );
+
+      const targetWidth =
+        Math.max(
+          1,
+          Math.floor(
+            rect.width * dpr
+          )
+        );
+
+      const targetHeight =
+        Math.max(
+          1,
+          Math.floor(
+            rect.height * dpr
+          )
+        );
+
+      if (
+        canvas.width !==
+          targetWidth ||
+        canvas.height !==
+          targetHeight
+      ) {
+        canvas.width =
+          targetWidth;
+
+        canvas.height =
+          targetHeight;
       }
 
+      context.setTransform(
+        dpr,
+        0,
+        0,
+        dpr,
+        0,
+        0
+      );
+    }
 
-      {/*
-       * =====================================
-       * トラック
-       * =====================================
-       */}
+    function roundRect(
+      ctx: CanvasRenderingContext2D,
+      x: number,
+      y: number,
+      width: number,
+      height: number,
+      radius: number
+    ) {
+      const r =
+        Math.min(
+          radius,
+          width / 2,
+          height / 2
+        );
 
-      <div
-        style={{
-          position:
-            "absolute",
-          left:
-            "-4%",
-          right:
-            "-4%",
-          top:
-            "57%",
-          height:
-            "34%",
-          background:
-            "linear-gradient(180deg,#9a7959,#806044)",
-          transform:
-            "perspective(1000px) rotateX(4deg)",
-          boxShadow:
-            "0 15px 25px rgba(0,0,0,.25)",
-          zIndex:
-            3,
-        }}
-      />
+      ctx.beginPath();
 
+      ctx.moveTo(
+        x + r,
+        y
+      );
 
-      {/*
-       * 砂の流れ
-       */}
+      ctx.lineTo(
+        x + width - r,
+        y
+      );
 
-      <div
-        style={{
-          position:
-            "absolute",
-          left:
-            "-5%",
-          right:
-            "-5%",
-          top:
-            "57%",
-          height:
-            "34%",
-          opacity:
-            0.16,
-          backgroundPositionX:
-            `${-sceneryOffset * 28}px`,
-          backgroundImage:
-            "linear-gradient(90deg,rgba(255,255,255,.16) 0 22px,transparent 22px 48px)",
-          backgroundSize:
-            "48px 100%",
-          zIndex:
-            4,
-        }}
-      />
+      ctx.quadraticCurveTo(
+        x + width,
+        y,
+        x + width,
+        y + r
+      );
 
+      ctx.lineTo(
+        x + width,
+        y + height - r
+      );
 
-      {/*
-       * =====================================
-       * 背景の距離標
-       * =====================================
-       */}
+      ctx.quadraticCurveTo(
+        x + width,
+        y + height,
+        x + width - r,
+        y + height
+      );
 
-      {
-        Array.from(
-          { length: 9 },
+      ctx.lineTo(
+        x + r,
+        y + height
+      );
+
+      ctx.quadraticCurveTo(
+        x,
+        y + height,
+        x,
+        y + height - r
+      );
+
+      ctx.lineTo(
+        x,
+        y + r
+      );
+
+      ctx.quadraticCurveTo(
+        x,
+        y,
+        x + r,
+        y
+      );
+
+      ctx.closePath();
+    }
+
+    function drawBackground(
+      ctx: CanvasRenderingContext2D,
+      width: number,
+      height: number,
+      cameraWorld: number
+    ) {
+      const skyBottom =
+        height * 0.33;
+
+      const sky =
+        ctx.createLinearGradient(
+          0,
+          0,
+          0,
+          skyBottom
+        );
+
+      sky.addColorStop(
+        0,
+        "#75c8f4"
+      );
+
+      sky.addColorStop(
+        1,
+        "#d9f1fb"
+      );
+
+      ctx.fillStyle = sky;
+
+      ctx.fillRect(
+        0,
+        0,
+        width,
+        skyBottom
+      );
+
+      ctx.fillStyle =
+        "rgba(255,255,255,0.75)";
+
+      for (
+        let i = -1;
+        i < 6;
+        i += 1
+      ) {
+        const cloudX =
           (
-            _,
-            index
-          ) => {
+            i * 310 -
+            cameraWorld * 8
+          ) %
+            (width + 500) -
+          100;
 
-            const base =
-              10 +
-              index * 15
+        const cloudY =
+          55 +
+          (i % 3) * 35;
 
+        ctx.beginPath();
 
-            const x =
-              wrap(
-                base -
-                sceneryOffset *
-                1.2,
-                145
-              ) - 15
+        ctx.arc(
+          cloudX,
+          cloudY,
+          28,
+          0,
+          Math.PI * 2
+        );
 
+        ctx.arc(
+          cloudX + 32,
+          cloudY - 9,
+          38,
+          0,
+          Math.PI * 2
+        );
 
-            return (
+        ctx.arc(
+          cloudX + 72,
+          cloudY,
+          28,
+          0,
+          Math.PI * 2
+        );
 
-              <div
-                key={
-                  `marker-${index}`
-                }
-                style={{
-                  position:
-                    "absolute",
-                  left:
-                    `${x}%`,
-                  top:
-                    "45%",
-                  width:
-                    "12px",
-                  height:
-                    "60px",
-                  background:
-                    "#f8f8f8",
-                  border:
-                    "2px solid #666",
-                  borderRadius:
-                    "3px",
-                  zIndex:
-                    6,
-                  boxShadow:
-                    "2px 3px 4px rgba(0,0,0,.25)",
-                }}
-              />
-
-            )
-
-          }
-        )
+        ctx.fill();
       }
 
+      const standTop =
+        height * 0.18;
 
-      {/*
-       * =====================================
-       * 馬群
-       * =====================================
-       */}
+      const standBottom =
+        height * 0.39;
 
-      {
-        tableHorses.map(
-          (
-            horse,
-            index
-          ) => {
+      ctx.fillStyle =
+        "#dde3e8";
 
-            const position =
-              positions[
-                horse.tableNumber
-              ] ?? 0
+      ctx.fillRect(
+        0,
+        standTop,
+        width,
+        standBottom -
+          standTop
+      );
 
+      ctx.fillStyle =
+        "#4c5964";
 
-            /*
-             * カメラは先頭馬を
-             * 約45%地点で追う。
-             */
+      ctx.fillRect(
+        0,
+        standTop,
+        width,
+        13
+      );
 
-            const rawX =
-              45 +
+      for (
+        let row = 0;
+        row < 5;
+        row += 1
+      ) {
+        const y =
+          standTop +
+          35 +
+          row * 24;
+
+        ctx.fillStyle =
+          row % 2 === 0
+            ? "#758391"
+            : "#8997a3";
+
+        ctx.fillRect(
+          0,
+          y,
+          width,
+          11
+        );
+      }
+
+      const crowdOffset =
+        -(
+          cameraWorld * 12
+        ) % 36;
+
+      for (
+        let x = crowdOffset;
+        x < width + 36;
+        x += 18
+      ) {
+        for (
+          let row = 0;
+          row < 4;
+          row += 1
+        ) {
+          const y =
+            standTop +
+            48 +
+            row * 25;
+
+          ctx.fillStyle =
+            [
+              "#d9544f",
+              "#3367aa",
+              "#f0b737",
+              "#397b4d",
+              "#6e4f8e",
+            ][
               (
-                position -
-                leaderPosition
-              ) * 4.6
+                Math.floor(
+                  x / 18
+                ) +
+                row
+              ) %
+                5
+            ];
 
+          ctx.beginPath();
 
-            const x =
-              clamp(
-                rawX,
-                6,
-                89
-              )
+          ctx.arc(
+            x +
+              (row % 2) * 7,
+            y,
+            4,
+            0,
+            Math.PI * 2
+          );
 
+          ctx.fill();
+        }
+      }
 
-            /*
-             * 馬群を縦方向に
-             * 少しずつずらす。
-             */
+      const turfTop =
+        height * 0.38;
 
-            const denominator =
-              Math.max(
-                tableHorses.length -
-                1,
-                1
-              )
+      const grass =
+        ctx.createLinearGradient(
+          0,
+          turfTop,
+          0,
+          height
+        );
 
+      grass.addColorStop(
+        0,
+        "#4d9e43"
+      );
+
+      grass.addColorStop(
+        1,
+        "#1e672d"
+      );
+
+      ctx.fillStyle =
+        grass;
+
+      ctx.fillRect(
+        0,
+        turfTop,
+        width,
+        height - turfTop
+      );
+
+      const stripeWidth =
+        Math.max(
+          80,
+          width * 0.08
+        );
+
+      const stripeOffset =
+        -(
+          cameraWorld *
+          width *
+          0.012
+        ) %
+        (
+          stripeWidth * 2
+        );
+
+      ctx.globalAlpha =
+        0.09;
+
+      ctx.fillStyle =
+        "#ffffff";
+
+      for (
+        let x =
+          stripeOffset -
+          stripeWidth * 2;
+        x <
+        width +
+          stripeWidth * 2;
+        x +=
+          stripeWidth * 2
+      ) {
+        ctx.fillRect(
+          x,
+          turfTop,
+          stripeWidth,
+          height -
+            turfTop
+        );
+      }
+
+      ctx.globalAlpha = 1;
+
+      const railY =
+        height * 0.43;
+
+      ctx.strokeStyle =
+        "#ffffff";
+
+      ctx.lineWidth = 7;
+
+      ctx.beginPath();
+
+      ctx.moveTo(
+        0,
+        railY
+      );
+
+      ctx.lineTo(
+        width,
+        railY
+      );
+
+      ctx.stroke();
+
+      ctx.strokeStyle =
+        "#d6d6d6";
+
+      ctx.lineWidth = 3;
+
+      const postOffset =
+        -(
+          cameraWorld * 18
+        ) % 95;
+
+      for (
+        let x =
+          postOffset - 95;
+        x < width + 95;
+        x += 95
+      ) {
+        ctx.beginPath();
+
+        ctx.moveTo(
+          x,
+          railY - 5
+        );
+
+        ctx.lineTo(
+          x - 15,
+          railY + 55
+        );
+
+        ctx.stroke();
+      }
+
+      ctx.strokeStyle =
+        "rgba(255,255,255,0.17)";
+
+      ctx.lineWidth = 2;
+
+      for (
+        let i = 1;
+        i <= 4;
+        i += 1
+      ) {
+        const y =
+          turfTop +
+          (
+            (height -
+              turfTop) /
+            5
+          ) *
+            i;
+
+        ctx.beginPath();
+
+        ctx.moveTo(
+          0,
+          y
+        );
+
+        ctx.lineTo(
+          width,
+          y
+        );
+
+        ctx.stroke();
+      }
+    }
+
+    function drawFinish(
+      ctx: CanvasRenderingContext2D,
+      x: number,
+      height: number
+    ) {
+      if (
+        x < -100 ||
+        x >
+          ctx.canvas
+            .getBoundingClientRect()
+            .width +
+            100
+      ) {
+        return;
+      }
+
+      const top =
+        height * 0.33;
+
+      const bottom =
+        height * 0.94;
+
+      ctx.fillStyle =
+        "rgba(0,0,0,0.16)";
+
+      ctx.fillRect(
+        x + 8,
+        top,
+        13,
+        bottom - top
+      );
+
+      ctx.fillStyle =
+        "#ffffff";
+
+      ctx.fillRect(
+        x - 4,
+        top,
+        8,
+        bottom - top
+      );
+
+      const block = 12;
+
+      for (
+        let y = top;
+        y < bottom;
+        y += block
+      ) {
+        ctx.fillStyle =
+          Math.floor(
+            (
+              y -
+              top
+            ) /
+              block
+          ) %
+            2 ===
+          0
+            ? "#111111"
+            : "#ffffff";
+
+        ctx.fillRect(
+          x - 16,
+          y,
+          12,
+          block
+        );
+
+        ctx.fillStyle =
+          Math.floor(
+            (
+              y -
+              top
+            ) /
+              block
+          ) %
+            2 ===
+          0
+            ? "#ffffff"
+            : "#111111";
+
+        ctx.fillRect(
+          x - 28,
+          y,
+          12,
+          block
+        );
+      }
+
+      ctx.save();
+
+      ctx.translate(
+        x - 50,
+        top - 10
+      );
+
+      ctx.fillStyle =
+        "#111";
+
+      ctx.font =
+        "900 18px sans-serif";
+
+      ctx.textAlign =
+        "center";
+
+      ctx.fillText(
+        "GOAL",
+        20,
+        0
+      );
+
+      ctx.restore();
+    }
+
+    function drawHorse(
+      ctx: CanvasRenderingContext2D,
+      horse: HorseData,
+      motion: RaceMotion,
+      x: number,
+      y: number,
+      scale: number,
+      time: number,
+      color: string
+    ) {
+      const speedPhase =
+        time * 0.012 +
+        motion.seed;
+
+      const legSwing =
+        Math.sin(
+          speedPhase
+        );
+
+      const legSwing2 =
+        Math.sin(
+          speedPhase +
+            Math.PI
+        );
+
+      ctx.save();
+
+      ctx.translate(
+        x,
+        y
+      );
+
+      ctx.scale(
+        scale,
+        scale
+      );
+
+      ctx.globalAlpha =
+        0.22;
+
+      ctx.fillStyle =
+        "#102411";
+
+      ctx.beginPath();
+
+      ctx.ellipse(
+        -2,
+        28,
+        48,
+        10,
+        0,
+        0,
+        Math.PI * 2
+      );
+
+      ctx.fill();
+
+      ctx.globalAlpha = 1;
+
+      const bodyColor =
+        "#6f3e23";
+
+      const darkBody =
+        "#4e2817";
+
+      ctx.fillStyle =
+        bodyColor;
+
+      ctx.beginPath();
+
+      ctx.ellipse(
+        0,
+        0,
+        42,
+        21,
+        -0.08,
+        0,
+        Math.PI * 2
+      );
+
+      ctx.fill();
+
+      ctx.fillStyle =
+        darkBody;
+
+      ctx.beginPath();
+
+      ctx.moveTo(
+        27,
+        -8
+      );
+
+      ctx.lineTo(
+        47,
+        -40
+      );
+
+      ctx.lineTo(
+        59,
+        -35
+      );
+
+      ctx.lineTo(
+        38,
+        2
+      );
+
+      ctx.closePath();
+
+      ctx.fill();
+
+      ctx.fillStyle =
+        bodyColor;
+
+      ctx.beginPath();
+
+      ctx.ellipse(
+        58,
+        -39,
+        17,
+        10,
+        -0.08,
+        0,
+        Math.PI * 2
+      );
+
+      ctx.fill();
+
+      ctx.beginPath();
+
+      ctx.moveTo(
+        58,
+        -48
+      );
+
+      ctx.lineTo(
+        63,
+        -62
+      );
+
+      ctx.lineTo(
+        68,
+        -46
+      );
+
+      ctx.fill();
+
+      ctx.strokeStyle =
+        "#2b170d";
+
+      ctx.lineWidth = 5;
+
+      ctx.lineCap =
+        "round";
+
+      const drawLeg = (
+        hipX: number,
+        hipY: number,
+        swing: number,
+        reverse: boolean
+      ) => {
+        const direction =
+          reverse
+            ? -1
+            : 1;
+
+        const kneeX =
+          hipX +
+          swing *
+            16 *
+            direction;
+
+        const kneeY =
+          hipY + 20;
+
+        const hoofX =
+          kneeX +
+          swing *
+            20 *
+            direction;
+
+        const hoofY =
+          hipY + 43;
+
+        ctx.beginPath();
+
+        ctx.moveTo(
+          hipX,
+          hipY
+        );
+
+        ctx.lineTo(
+          kneeX,
+          kneeY
+        );
+
+        ctx.lineTo(
+          hoofX,
+          hoofY
+        );
+
+        ctx.stroke();
+      };
+
+      drawLeg(
+        -25,
+        10,
+        legSwing,
+        false
+      );
+
+      drawLeg(
+        -10,
+        12,
+        legSwing2,
+        true
+      );
+
+      drawLeg(
+        19,
+        10,
+        legSwing2,
+        false
+      );
+
+      drawLeg(
+        29,
+        7,
+        legSwing,
+        true
+      );
+
+      ctx.strokeStyle =
+        "#2d1b12";
+
+      ctx.lineWidth = 6;
+
+      ctx.beginPath();
+
+      ctx.moveTo(
+        -38,
+        -8
+      );
+
+      ctx.quadraticCurveTo(
+        -62,
+        -5 +
+          legSwing * 5,
+        -72,
+        -21 +
+          legSwing * 7
+      );
+
+      ctx.stroke();
+
+      ctx.fillStyle =
+        color;
+
+      ctx.fillRect(
+        -12,
+        -20,
+        30,
+        21
+      );
+
+      ctx.strokeStyle =
+        "#111";
+
+      ctx.lineWidth = 2;
+
+      ctx.strokeRect(
+        -12,
+        -20,
+        30,
+        21
+      );
+
+      ctx.fillStyle =
+        color === "#222222"
+          ? "#ffffff"
+          : "#111111";
+
+      ctx.font =
+        "900 13px sans-serif";
+
+      ctx.textAlign =
+        "center";
+
+      ctx.textBaseline =
+        "middle";
+
+      ctx.fillText(
+        String(
+          horse.tableNumber
+        ),
+        3,
+        -9
+      );
+
+      ctx.save();
+
+      ctx.rotate(
+        -0.22
+      );
+
+      ctx.fillStyle =
+        color;
+
+      ctx.beginPath();
+
+      ctx.moveTo(
+        2,
+        -43
+      );
+
+      ctx.lineTo(
+        28,
+        -37
+      );
+
+      ctx.lineTo(
+        20,
+        -14
+      );
+
+      ctx.lineTo(
+        -5,
+        -23
+      );
+
+      ctx.closePath();
+
+      ctx.fill();
+
+      ctx.fillStyle =
+        "#f2bd8d";
+
+      ctx.beginPath();
+
+      ctx.arc(
+        17,
+        -51,
+        8,
+        0,
+        Math.PI * 2
+      );
+
+      ctx.fill();
+
+      ctx.fillStyle =
+        color;
+
+      ctx.beginPath();
+
+      ctx.arc(
+        16,
+        -56,
+        9,
+        Math.PI,
+        Math.PI * 2
+      );
+
+      ctx.fill();
+
+      ctx.strokeStyle =
+        "#202020";
+
+      ctx.lineWidth = 3;
+
+      ctx.beginPath();
+
+      ctx.moveTo(
+        6,
+        -23
+      );
+
+      ctx.lineTo(
+        37,
+        -10
+      );
+
+      ctx.stroke();
+
+      ctx.restore();
+
+      ctx.restore();
+
+      const labelWidth =
+        clamp(
+          118 * scale,
+          86,
+          135
+        );
+
+      const labelHeight =
+        clamp(
+          30 * scale,
+          23,
+          31
+        );
+
+      const labelX =
+        x -
+        labelWidth / 2;
+
+      const labelY =
+        y -
+        77 * scale;
+
+      roundRect(
+        ctx,
+        labelX,
+        labelY,
+        labelWidth,
+        labelHeight,
+        7
+      );
+
+      ctx.fillStyle =
+        "rgba(255,255,255,0.94)";
+
+      ctx.fill();
+
+      ctx.strokeStyle =
+        color;
+
+      ctx.lineWidth = 3;
+
+      ctx.stroke();
+
+      ctx.fillStyle =
+        "#151515";
+
+      ctx.font =
+        `800 ${clamp(
+          13 * scale,
+          10,
+          14
+        )}px sans-serif`;
+
+      ctx.textAlign =
+        "center";
+
+      ctx.textBaseline =
+        "middle";
+
+      let name =
+        horse.horseName ||
+        `${horse.tableNumber}卓`;
+
+      if (
+        name.length > 10
+      ) {
+        name =
+          `${name.slice(
+            0,
+            9
+          )}…`;
+      }
+
+      ctx.fillText(
+        `${horse.tableNumber} ${name}`,
+        x,
+        labelY +
+          labelHeight / 2
+      );
+    }
+
+    function drawRaceInfo(
+      ctx: CanvasRenderingContext2D,
+      width: number,
+      height: number,
+      motions: RaceMotion[],
+      horseData: HorseData[]
+    ) {
+      if (
+        motions.length === 0
+      ) {
+        return;
+      }
+
+      const ordered =
+        [...motions].sort(
+          (a, b) =>
+            b.progress -
+            a.progress
+        );
+
+      const panelWidth =
+        clamp(
+          width * 0.18,
+          170,
+          255
+        );
+
+      const panelX =
+        width -
+        panelWidth -
+        18;
+
+      const panelY = 18;
+
+      const rows =
+        Math.min(
+          ordered.length,
+          5
+        );
+
+      const panelHeight =
+        49 +
+        rows * 34;
+
+      roundRect(
+        ctx,
+        panelX,
+        panelY,
+        panelWidth,
+        panelHeight,
+        12
+      );
+
+      ctx.fillStyle =
+        "rgba(5,16,12,0.78)";
+
+      ctx.fill();
+
+      ctx.fillStyle =
+        "#ffffff";
+
+      ctx.textAlign =
+        "left";
+
+      ctx.textBaseline =
+        "middle";
+
+      ctx.font =
+        "900 17px sans-serif";
+
+      ctx.fillText(
+        "CURRENT ORDER",
+        panelX + 14,
+        panelY + 22
+      );
+
+      ordered
+        .slice(
+          0,
+          rows
+        )
+        .forEach(
+          (
+            motion,
+            index
+          ) => {
+            const horse =
+              horseData.find(
+                item =>
+                  item.tableNumber ===
+                  motion.tableNumber
+              );
+
+            if (!horse) {
+              return;
+            }
 
             const y =
-              61 +
-              (
-                index /
-                denominator
-              ) * 22
+              panelY +
+              51 +
+              index * 34;
 
+            const color =
+              HORSE_COLORS[
+                (
+                  horse.tableNumber -
+                  1
+                ) %
+                  HORSE_COLORS.length
+              ];
 
-            const isLeader =
-              position ===
-                leaderPosition &&
-              leaderPosition > 0
+            ctx.fillStyle =
+              color;
 
+            ctx.beginPath();
 
-            const isFinished =
-              position >= 100
+            ctx.arc(
+              panelX + 19,
+              y,
+              10,
+              0,
+              Math.PI * 2
+            );
 
+            ctx.fill();
 
-            const silkColor =
-              SILK_COLORS[
-                index %
-                SILK_COLORS.length
-              ]
+            ctx.fillStyle =
+              color ===
+              "#222222"
+                ? "#ffffff"
+                : "#111111";
 
+            ctx.font =
+              "900 11px sans-serif";
 
-            return (
+            ctx.textAlign =
+              "center";
 
-              <div
-                key={
-                  horse.tableNumber
-                }
-                style={{
-                  position:
-                    "absolute",
-                  left:
-                    `${x}%`,
-                  top:
-                    `${y}%`,
-                  transform:
-                    "translate(-50%,-50%)",
-                  transition:
-                    "left .12s linear",
-                  zIndex:
-                    30 +
-                    index,
-                }}
-              >
+            ctx.fillText(
+              String(
+                horse.tableNumber
+              ),
+              panelX + 19,
+              y
+            );
 
-                {/*
-                 * 馬の影
-                 */}
+            ctx.fillStyle =
+              "#ffffff";
 
-                <div
-                  style={{
-                    position:
-                      "absolute",
-                    left:
-                      "12px",
-                    top:
-                      "73px",
-                    width:
-                      "120px",
-                    height:
-                      "16px",
-                    borderRadius:
-                      "50%",
-                    background:
-                      "rgba(0,0,0,.3)",
-                    filter:
-                      "blur(5px)",
-                  }}
-                />
+            ctx.font =
+              "700 14px sans-serif";
 
+            ctx.textAlign =
+              "left";
 
-                <div
-                  className={
-                    isFinished
-                      ? ""
-                      : "horse-body-run"
-                  }
-                >
+            let name =
+              horse.horseName;
 
-                  <RaceHorse
-                    silkColor={
-                      silkColor
-                    }
-                    finished={
-                      isFinished
-                    }
-                    leader={
-                      isLeader
-                    }
-                  />
+            if (
+              name.length > 11
+            ) {
+              name =
+                `${name.slice(
+                  0,
+                  10
+                )}…`;
+            }
 
-                </div>
-
-
-                {/*
-                 * 馬名
-                 */}
-
-                <div
-                  style={{
-                    position:
-                      "absolute",
-                    left:
-                      "50%",
-                    bottom:
-                      "88px",
-                    transform:
-                      "translateX(-50%)",
-                    whiteSpace:
-                      "nowrap",
-                    background:
-                      "rgba(0,0,0,.72)",
-                    border:
-                      isLeader
-                        ? "2px solid #ffd54a"
-                        : "1px solid rgba(255,255,255,.6)",
-                    borderRadius:
-                      "7px",
-                    padding:
-                      "4px 9px",
-                    fontSize:
-                      isLeader
-                        ? "15px"
-                        : "13px",
-                    fontWeight:
-                      900,
-                    boxShadow:
-                      "0 3px 7px rgba(0,0,0,.35)",
-                  }}
-                >
-
-                  {
-                    isLeader
-                      ? "🥇 "
-                      : ""
-                  }
-
-                  {horse.horseName}
-
-                </div>
-
-
-                {
-                  isFinished &&
-
-                  <div
-                    style={{
-                      position:
-                        "absolute",
-                      left:
-                        "50%",
-                      bottom:
-                        "116px",
-                      transform:
-                        "translateX(-50%)",
-                      fontSize:
-                        "18px",
-                      fontWeight:
-                        900,
-                      whiteSpace:
-                        "nowrap",
-                    }}
-                  >
-                    🏁 GOAL
-                  </div>
-
-                }
-
-              </div>
-
-            )
-
+            ctx.fillText(
+              `${index + 1}. ${name}`,
+              panelX + 38,
+              y
+            );
           }
+        );
+
+      ctx.fillStyle =
+        "rgba(0,0,0,0.68)";
+
+      roundRect(
+        ctx,
+        18,
+        18,
+        180,
+        55,
+        10
+      );
+
+      ctx.fill();
+
+      ctx.fillStyle =
+        "#ffffff";
+
+      ctx.textAlign =
+        "left";
+
+      ctx.font =
+        "900 17px sans-serif";
+
+      ctx.fillText(
+        "WEDDING DERBY",
+        31,
+        39
+      );
+
+      ctx.font =
+        "700 13px sans-serif";
+
+      ctx.fillStyle =
+        "#e4e4e4";
+
+      ctx.fillText(
+        "芝 1600m",
+        31,
+        59
+      );
+
+      void height;
+    }
+
+    function drawFrame(
+      now: number
+    ) {
+      if (
+        disposed ||
+        !canvasRef.current
+      ) {
+        return;
+      }
+
+      resizeCanvas();
+
+      const rect =
+        canvas.getBoundingClientRect();
+
+      const width =
+        rect.width;
+
+      const height =
+        rect.height;
+
+      const activeHorses =
+        horsesRef.current;
+
+      const motions =
+        motionsRef.current;
+
+      if (
+        raceStarted &&
+        count === 0 &&
+        motions.length > 0
+      ) {
+        if (
+          lastTimeRef.current ===
+          null
+        ) {
+          lastTimeRef.current =
+            now;
+        }
+
+        const deltaSeconds =
+          clamp(
+            (
+              now -
+              lastTimeRef.current
+            ) /
+              1000,
+            0,
+            0.05
+          );
+
+        lastTimeRef.current =
+          now;
+
+        elapsedRef.current +=
+          deltaSeconds;
+
+        const scoreValues =
+          activeHorses.map(
+            horse =>
+              horse.averageScore
+          );
+
+        const fieldAverage =
+          scoreValues.length > 0
+            ? scoreValues.reduce(
+                (
+                  total,
+                  value
+                ) =>
+                  total +
+                  value,
+                0
+              ) /
+              scoreValues.length
+            : 0;
+
+        const newlyFinished:
+          number[] = [];
+
+        motions.forEach(
+          motion => {
+            if (
+              motion.finished
+            ) {
+              return;
+            }
+
+            const horse =
+              activeHorses.find(
+                item =>
+                  item.tableNumber ===
+                  motion.tableNumber
+              );
+
+            if (!horse) {
+              return;
+            }
+
+            const scoreDifference =
+              horse.averageScore -
+              fieldAverage;
+
+            let scoreEffect =
+              Math.tanh(
+                scoreDifference /
+                  18
+              ) * 0.065;
+
+            const raceProgress =
+              motion.progress /
+              100;
+
+            if (
+              raceProgress >
+              0.84
+            ) {
+              scoreEffect *=
+                1.35;
+            }
+
+            const naturalWave =
+              (
+                Math.sin(
+                  elapsedRef.current *
+                    0.57 +
+                    motion.seed
+                ) *
+                  0.022 +
+                Math.sin(
+                  elapsedRef.current *
+                    1.13 +
+                    motion.seed *
+                      2
+                ) *
+                  0.012
+              ) *
+              (
+                raceProgress >
+                0.84
+                  ? 0.45
+                  : 1
+              );
+
+            const idealProgress =
+              Math.min(
+                99,
+                (
+                  elapsedRef.current /
+                  90
+                ) *
+                  100
+              );
+
+            const paceCorrection =
+              clamp(
+                (
+                  idealProgress -
+                  motion.progress
+                ) *
+                  0.006,
+                -0.05,
+                0.07
+              );
+
+            const multiplier =
+              clamp(
+                1 +
+                  scoreEffect +
+                  naturalWave +
+                  paceCorrection,
+                0.86,
+                1.15
+              );
+
+            motion.progress +=
+              BASE_SPEED *
+              multiplier *
+              deltaSeconds;
+
+            if (
+              elapsedRef.current >
+                84 &&
+              motion.progress <
+                92
+            ) {
+              motion.progress +=
+                BASE_SPEED *
+                0.08 *
+                deltaSeconds;
+            }
+
+            if (
+              motion.progress >=
+              100
+            ) {
+              motion.progress =
+                100;
+
+              motion.finished =
+                true;
+
+              newlyFinished.push(
+                motion.tableNumber
+              );
+            }
+          }
+        );
+
+        if (
+          newlyFinished.length >
+          0
+        ) {
+          newlyFinished.sort(
+            (a, b) => {
+              const ma =
+                motions.find(
+                  item =>
+                    item.tableNumber ===
+                    a
+                );
+
+              const mb =
+                motions.find(
+                  item =>
+                    item.tableNumber ===
+                    b
+                );
+
+              return (
+                (
+                  mb?.progress ??
+                  0
+                ) -
+                (
+                  ma?.progress ??
+                  0
+                )
+              );
+            }
+          );
+
+          newlyFinished.forEach(
+            tableNumber => {
+              if (
+                finishedSentRef.current.has(
+                  tableNumber
+                )
+              ) {
+                return;
+              }
+
+              finishedSentRef.current.add(
+                tableNumber
+              );
+
+              setRanking(
+                previous =>
+                  previous.includes(
+                    tableNumber
+                  )
+                    ? previous
+                    : [
+                        ...previous,
+                        tableNumber,
+                      ]
+              );
+
+              finishTable(
+                tableNumber
+              );
+            }
+          );
+        }
+      }
+
+      const leader =
+        motionsRef.current
+          .length > 0
+          ? Math.max(
+              ...motionsRef.current.map(
+                motion =>
+                  motion.progress
+              )
+            )
+          : 0;
+
+      const cameraWorld =
+        leader < 42
+          ? 0
+          : clamp(
+              leader - 42,
+              0,
+              52
+            );
+
+      drawBackground(
+        context,
+        width,
+        height,
+        cameraWorld
+      );
+
+      const worldScale =
+        width / 70;
+
+      const leftMargin =
+        width * 0.075;
+
+      const finishX =
+        leftMargin +
+        (
+          100 -
+          cameraWorld
+        ) *
+          worldScale;
+
+      drawFinish(
+        context,
+        finishX,
+        height
+      );
+
+      const horseCount =
+        Math.max(
+          motionsRef.current
+            .length,
+          1
+        );
+
+      const trackTop =
+        height * 0.49;
+
+      const trackBottom =
+        height * 0.91;
+
+      const trackHeight =
+        trackBottom -
+        trackTop;
+
+      const drawable =
+        motionsRef.current
+          .map(
+            (
+              motion,
+              index
+            ) => {
+              const horse =
+                horsesRef.current.find(
+                  item =>
+                    item.tableNumber ===
+                    motion.tableNumber
+                );
+
+              if (!horse) {
+                return null;
+              }
+
+              const slot =
+                horseCount <= 1
+                  ? 0.5
+                  : index /
+                    (
+                      horseCount -
+                      1
+                    );
+
+              const y =
+                trackTop +
+                slot *
+                  trackHeight;
+
+              const scale =
+                0.62 +
+                slot * 0.34;
+
+              const x =
+                leftMargin +
+                (
+                  motion.progress -
+                  cameraWorld
+                ) *
+                  worldScale;
+
+              return {
+                horse,
+                motion,
+                x,
+                y,
+                scale,
+              };
+            }
+          )
+          .filter(
+            (
+              item
+            ): item is NonNullable<
+              typeof item
+            > =>
+              item !== null
+          )
+          .sort(
+            (a, b) =>
+              a.y - b.y
+          );
+
+      drawable.forEach(
+        item => {
+          const color =
+            HORSE_COLORS[
+              (
+                item.horse
+                  .tableNumber -
+                1
+              ) %
+                HORSE_COLORS.length
+            ];
+
+          drawHorse(
+            context,
+            item.horse,
+            item.motion,
+            item.x,
+            item.y,
+            item.scale,
+            now,
+            color
+          );
+        }
+      );
+
+      drawRaceInfo(
+        context,
+        width,
+        height,
+        motionsRef.current,
+        horsesRef.current
+      );
+
+      animationRef.current =
+        requestAnimationFrame(
+          drawFrame
+        );
+    }
+
+    animationRef.current =
+      requestAnimationFrame(
+        drawFrame
+      );
+
+    window.addEventListener(
+      "resize",
+      resizeCanvas
+    );
+
+    return () => {
+      disposed = true;
+
+      window.removeEventListener(
+        "resize",
+        resizeCanvas
+      );
+
+      if (
+        animationRef.current !==
+        null
+      ) {
+        cancelAnimationFrame(
+          animationRef.current
+        );
+      }
+    };
+  }, [
+    raceStarted,
+    count,
+  ]);
+
+  const winner =
+    ranking.length > 0
+      ? horses.find(
+          horse =>
+            horse.tableNumber ===
+            ranking[0]
         )
-      }
+      : undefined;
 
+  const raceFinished =
+    horses.length > 0 &&
+    ranking.length ===
+      horses.length;
 
-      {/*
-       * =====================================
-       * ゴール板
-       *
-       * レース終盤だけ
-       * 右側から入ってくる。
-       * =====================================
-       */}
-
-      {
-        finishScreenX <
-          115 &&
-
-        <div
-          style={{
-            position:
-              "absolute",
-            left:
-              `${finishScreenX}%`,
-            top:
-              "45%",
-            height:
-              "48%",
-            width:
-              "18px",
-            background:
-              "#ffffff",
-            borderLeft:
-              "5px solid #222",
-            borderRight:
-              "5px solid #222",
-            boxShadow:
-              "0 0 15px rgba(0,0,0,.45)",
-            transform:
-              "translateX(-50%)",
-            zIndex:
-              45,
-          }}
-        >
-
-          <div
-            style={{
-              position:
-                "absolute",
-              top:
-                "-68px",
-              left:
-                "50%",
-              transform:
-                "translateX(-50%)",
-              fontSize:
-                "55px",
-            }}
-          >
-            🏁
-          </div>
-
-        </div>
-
-      }
-
-
-      {/*
-       * =====================================
-       * 上部情報
-       * =====================================
-       */}
+  return (
+    <div
+      style={{
+        width: "100vw",
+        height: "100vh",
+        margin: 0,
+        padding: 0,
+        overflow: "hidden",
+        background: "#07130c",
+        position: "relative",
+        fontFamily:
+          '"Hiragino Kaku Gothic ProN", "Yu Gothic", sans-serif',
+      }}
+    >
+      <canvas
+        ref={canvasRef}
+        style={{
+          display: "block",
+          width: "100%",
+          height: "100%",
+        }}
+      />
 
       <div
         style={{
-          position:
-            "absolute",
-          top:
-            "18px",
-          left:
-            "24px",
-          zIndex:
-            80,
+          position: "absolute",
+          left: "50%",
+          top: "18px",
+          transform:
+            "translateX(-50%)",
+          zIndex: 15,
+          color: "#ffffff",
+          textAlign: "center",
+          pointerEvents: "none",
           textShadow:
-            "0 3px 8px rgba(0,0,0,.8)",
+            "0 2px 6px rgba(0,0,0,0.9)",
         }}
       >
-
         <div
           style={{
             fontSize:
-              "29px",
-            fontWeight:
-              900,
+              "clamp(20px, 2.4vw, 38px)",
+            fontWeight: 900,
           }}
         >
           {eventInfo.title}
         </div>
 
-
         <div
           style={{
             fontSize:
-              "15px",
-            fontWeight:
-              700,
+              "clamp(12px, 1.3vw, 19px)",
+            fontWeight: 700,
+            marginTop: "2px",
           }}
         >
           {eventInfo.groom}
           {" × "}
           {eventInfo.bride}
         </div>
-
       </div>
 
-
-      {/*
-       * =====================================
-       * 下部バー
-       * =====================================
-       */}
-
-      <div
-        style={{
-          position:
-            "absolute",
-          left:
-            0,
-          right:
-            0,
-          bottom:
-            0,
-          height:
-            "48px",
-          background:
-            "linear-gradient(90deg,rgba(0,0,0,.9),rgba(20,20,20,.65),rgba(0,0,0,.9))",
-          borderTop:
-            "1px solid rgba(255,255,255,.3)",
-          display:
-            "flex",
-          alignItems:
-            "center",
-          justifyContent:
-            "center",
-          zIndex:
-            90,
-        }}
-      >
-
+      {!raceStarted && (
         <div
           style={{
-            fontSize:
-              "19px",
-            fontWeight:
-              900,
-            letterSpacing:
-              "5px",
+            position: "absolute",
+            inset: 0,
+            display: "flex",
+            alignItems: "center",
+            justifyContent:
+              "center",
+            background:
+              "rgba(0,0,0,0.48)",
+            zIndex: 30,
           }}
         >
-          WEDDING DERBY
+          <div
+            style={{
+              background:
+                "rgba(255,255,255,0.96)",
+              borderRadius:
+                "24px",
+              padding:
+                "34px 56px",
+              textAlign:
+                "center",
+              boxShadow:
+                "0 16px 60px rgba(0,0,0,0.45)",
+            }}
+          >
+            <div
+              style={{
+                fontSize:
+                  "72px",
+              }}
+            >
+              🏇
+            </div>
+
+            <h1
+              style={{
+                margin:
+                  "8px 0 12px",
+              }}
+            >
+              レース待機中
+            </h1>
+
+            <div
+              style={{
+                fontSize:
+                  "20px",
+              }}
+            >
+              出走予定{" "}
+              <strong>
+                {horses.length}
+              </strong>
+              頭
+            </div>
+          </div>
         </div>
+      )}
 
-      </div>
+      {raceStarted &&
+        count > 0 && (
+          <div
+            style={{
+              position:
+                "absolute",
+              inset: 0,
+              display: "flex",
+              alignItems:
+                "center",
+              justifyContent:
+                "center",
+              zIndex: 40,
+              background:
+                "rgba(0,0,0,0.32)",
+            }}
+          >
+            <div
+              style={{
+                fontSize:
+                  "clamp(150px, 25vw, 330px)",
+                lineHeight: 1,
+                fontWeight: 900,
+                color: "#ffffff",
+                WebkitTextStroke:
+                  "6px #111111",
+                textShadow:
+                  "0 12px 30px rgba(0,0,0,0.6)",
+              }}
+            >
+              {count}
+            </div>
+          </div>
+        )}
 
-
-      {/*
-       * =====================================
-       * アニメーション
-       * =====================================
-       */}
-
-      <style>
-        {`
-
-          @keyframes horseBodyRun {
-
-            0% {
+      {raceStarted &&
+        count === 0 &&
+        !raceFinished && (
+          <div
+            style={{
+              position:
+                "absolute",
+              left: "50%",
+              bottom: "18px",
               transform:
-                translateY(0)
-                rotate(-0.5deg);
-            }
+                "translateX(-50%)",
+              background:
+                "rgba(150,0,0,0.88)",
+              color: "#ffffff",
+              border:
+                "2px solid rgba(255,255,255,0.8)",
+              borderRadius:
+                "999px",
+              padding:
+                "7px 24px",
+              fontWeight: 900,
+              fontSize:
+                "clamp(14px, 1.6vw, 22px)",
+              letterSpacing:
+                "0.08em",
+              zIndex: 12,
+              boxShadow:
+                "0 4px 14px rgba(0,0,0,0.35)",
+              pointerEvents:
+                "none",
+            }}
+          >
+            WEDDING DERBY
+          </div>
+        )}
 
-            50% {
-              transform:
-                translateY(-5px)
-                rotate(0.7deg);
-            }
+      {raceFinished &&
+        winner && (
+          <div
+            style={{
+              position:
+                "absolute",
+              inset: 0,
+              display: "flex",
+              alignItems:
+                "center",
+              justifyContent:
+                "center",
+              background:
+                "rgba(0,0,0,0.72)",
+              zIndex: 50,
+            }}
+          >
+            <div
+              style={{
+                width:
+                  "min(860px, 86vw)",
+                maxHeight:
+                  "86vh",
+                overflow:
+                  "auto",
+                background:
+                  "linear-gradient(135deg, #fff6c9, #ffffff)",
+                border:
+                  "5px solid #d7b44a",
+                borderRadius:
+                  "28px",
+                padding:
+                  "28px 42px",
+                boxSizing:
+                  "border-box",
+                textAlign:
+                  "center",
+                boxShadow:
+                  "0 18px 70px rgba(0,0,0,0.65)",
+              }}
+          >
+            <div
+              style={{
+                fontSize:
+                  "72px",
+                lineHeight: 1,
+              }}
+            >
+              🏆
+            </div>
 
-            100% {
-              transform:
-                translateY(1px)
-                rotate(-0.5deg);
-            }
+            <div
+              style={{
+                fontSize:
+                  "clamp(22px, 3vw, 38px)",
+                fontWeight: 900,
+                marginTop:
+                  "10px",
+              }}
+            >
+              WINNER
+            </div>
 
-          }
+            <div
+              style={{
+                margin:
+                  "8px 0 20px",
+                fontSize:
+                  "clamp(34px, 5vw, 64px)",
+                fontWeight: 900,
+              }}
+            >
+              {winner.tableNumber}
+              卓{" "}
+              {winner.horseName}
+            </div>
 
+            <div
+              style={{
+                display:
+                  "grid",
+                gridTemplateColumns:
+                  "repeat(2, minmax(0, 1fr))",
+                gap:
+                  "7px 24px",
+                borderTop:
+                  "1px solid #d4c58f",
+                paddingTop:
+                  "18px",
+                textAlign:
+                  "left",
+              }}
+            >
+              {ranking.map(
+                (
+                  tableNumber,
+                  index
+                ) => {
+                  const horse =
+                    horses.find(
+                      item =>
+                        item.tableNumber ===
+                        tableNumber
+                    );
 
-          @keyframes frontLegA {
-
-            0% {
-              transform:
-                rotate(38deg);
-            }
-
-            100% {
-              transform:
-                rotate(-35deg);
-            }
-
-          }
-
-
-          @keyframes frontLegB {
-
-            0% {
-              transform:
-                rotate(-32deg);
-            }
-
-            100% {
-              transform:
-                rotate(34deg);
-            }
-
-          }
-
-
-          @keyframes backLegA {
-
-            0% {
-              transform:
-                rotate(-35deg);
-            }
-
-            100% {
-              transform:
-                rotate(35deg);
-            }
-
-          }
-
-
-          @keyframes backLegB {
-
-            0% {
-              transform:
-                rotate(32deg);
-            }
-
-            100% {
-              transform:
-                rotate(-32deg);
-            }
-
-          }
-
-
-          .horse-body-run {
-
-            animation:
-              horseBodyRun
-              .22s
-              infinite
-              alternate
-              ease-in-out;
-
-          }
-
-
-          .horse-leg-front-a {
-
-            animation:
-              frontLegA
-              .22s
-              infinite
-              alternate
-              ease-in-out;
-
-          }
-
-
-          .horse-leg-front-b {
-
-            animation:
-              frontLegB
-              .22s
-              infinite
-              alternate
-              ease-in-out;
-
-          }
-
-
-          .horse-leg-back-a {
-
-            animation:
-              backLegA
-              .22s
-              infinite
-              alternate
-              ease-in-out;
-
-          }
-
-
-          .horse-leg-back-b {
-
-            animation:
-              backLegB
-              .22s
-              infinite
-              alternate
-              ease-in-out;
-
-          }
-
-        `}
-      </style>
-
+                  return (
+                    <div
+                      key={
+                        tableNumber
+                      }
+                      style={{
+                        fontSize:
+                          "clamp(14px, 1.5vw, 19px)",
+                        fontWeight:
+                          index <
+                          3
+                            ? 900
+                            : 700,
+                        padding:
+                          "5px 8px",
+                      }}
+                    >
+                      {index ===
+                      0
+                        ? "🥇"
+                        : index ===
+                            1
+                          ? "🥈"
+                          : index ===
+                              2
+                            ? "🥉"
+                            : `${index + 1}位`}
+                      {"　"}
+                      {tableNumber}
+                      卓{" "}
+                      {
+                        horse?.horseName
+                      }
+                    </div>
+                  );
+                }
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
-
-  )
-
+  );
 }
 
-
-export default GamePage
+export default GamePage;

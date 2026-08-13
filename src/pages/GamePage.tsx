@@ -12,9 +12,7 @@ import {
   updateDoc,
 } from "firebase/firestore";
 
-import {
-  useGame,
-} from "../context/GameContext";
+import { useGame } from "../context/GameContext";
 
 import {
   subscribePlayers,
@@ -22,9 +20,7 @@ import {
   type Player,
 } from "../firebase/gameService";
 
-import {
-  db,
-} from "../firebase";
+import { db } from "../firebase";
 
 type HorseData = {
   tableNumber: number;
@@ -40,58 +36,58 @@ type RaceMotion = {
   seed: number;
 };
 
-const HORSE_COLORS = [
-  "#f7f7f7",
+const BASE_SPEED = 100 / 90;
+
+const JOCKEY_COLORS = [
+  "#f4f4f4",
   "#222222",
   "#d92d2d",
-  "#2767c7",
-  "#f0c629",
-  "#41a45b",
-  "#e8812e",
-  "#e96cae",
-  "#7b59c7",
-  "#2aa7a1",
-  "#b46b37",
+  "#2468c7",
+  "#f1c52a",
+  "#43a556",
+  "#ec812d",
+  "#e86cae",
+  "#7856c5",
+  "#28a8a2",
+  "#b66d38",
 ];
 
-const BASE_SPEED = 100 / 90;
+const DEPTH_Y = [0.57, 0.705, 0.845];
+const DEPTH_SCALE = [0.94, 1.13, 1.34];
 
 function clamp(
   value: number,
   min: number,
   max: number
 ) {
-  return Math.max(
-    min,
-    Math.min(max, value)
-  );
+  return Math.max(min, Math.min(max, value));
+}
+
+function getColor(tableNumber: number) {
+  return JOCKEY_COLORS[
+    (tableNumber - 1) %
+      JOCKEY_COLORS.length
+  ];
 }
 
 async function setAllPlayersFinished(
   finished: boolean
 ) {
   try {
-    const snapshot =
-      await getDocs(
-        collection(
-          db,
-          "players"
-        )
-      );
+    const snapshot = await getDocs(
+      collection(db, "players")
+    );
 
     await Promise.all(
-      snapshot.docs.map(
-        playerDoc =>
-          updateDoc(
-            doc(
-              db,
-              "players",
-              playerDoc.id
-            ),
-            {
-              finished,
-            }
-          )
+      snapshot.docs.map((playerDoc) =>
+        updateDoc(
+          doc(
+            db,
+            "players",
+            playerDoc.id
+          ),
+          { finished }
+        )
       )
     );
   } catch (error) {
@@ -106,36 +102,29 @@ async function finishTable(
   tableNumber: number
 ) {
   try {
-    const snapshot =
-      await getDocs(
-        collection(
-          db,
-          "players"
-        )
-      );
+    const snapshot = await getDocs(
+      collection(db, "players")
+    );
 
     const targets =
       snapshot.docs.filter(
-        playerDoc =>
-          (
+        (playerDoc) =>
+          Number(
             playerDoc.data()
               .tableNumber ?? 0
           ) === tableNumber
       );
 
     await Promise.all(
-      targets.map(
-        playerDoc =>
-          updateDoc(
-            doc(
-              db,
-              "players",
-              playerDoc.id
-            ),
-            {
-              finished: true,
-            }
-          )
+      targets.map((playerDoc) =>
+        updateDoc(
+          doc(
+            db,
+            "players",
+            playerDoc.id
+          ),
+          { finished: true }
+        )
       )
     );
   } catch (error) {
@@ -147,9 +136,7 @@ async function finishTable(
 }
 
 function GamePage() {
-  const {
-    eventInfo,
-  } = useGame();
+  const { eventInfo } = useGame();
 
   const canvasRef =
     useRef<HTMLCanvasElement | null>(
@@ -201,102 +188,90 @@ function GamePage() {
     setRanking,
   ] = useState<number[]>([]);
 
-  const horses =
-    useMemo(() => {
-      const grouped =
-        new Map<
-          number,
-          {
-            horseName: string;
-            totalScore: number;
-            playerCount: number;
-          }
-        >();
+  const horses = useMemo(() => {
+    const grouped = new Map<
+      number,
+      {
+        horseName: string;
+        totalScore: number;
+        playerCount: number;
+      }
+    >();
 
-      players.forEach(
-        player => {
-          const tableNumber =
-            Number(
-              player.tableNumber ?? 0
-            );
-
-          if (
-            !Number.isFinite(
-              tableNumber
-            ) ||
-            tableNumber <= 0
-          ) {
-            return;
-          }
-
-          const existing =
-            grouped.get(
-              tableNumber
-            );
-
-          if (existing) {
-            existing.totalScore +=
-              Number(
-                player.score ?? 0
-              );
-
-            existing.playerCount += 1;
-
-            if (
-              !existing.horseName &&
-              player.horseName
-            ) {
-              existing.horseName =
-                player.horseName;
-            }
-          } else {
-            grouped.set(
-              tableNumber,
-              {
-                horseName:
-                  player.horseName ||
-                  `${tableNumber}卓`,
-                totalScore:
-                  Number(
-                    player.score ?? 0
-                  ),
-                playerCount: 1,
-              }
-            );
-          }
-        }
+    players.forEach((player) => {
+      const tableNumber = Number(
+        player.tableNumber ?? 0
       );
 
-      return Array.from(
-        grouped.entries()
-      )
-        .map(
-          ([
-            tableNumber,
-            data,
-          ]) => ({
-            tableNumber,
+      if (
+        !Number.isFinite(tableNumber) ||
+        tableNumber <= 0
+      ) {
+        return;
+      }
+
+      const score = Number(
+        player.score ?? 0
+      );
+
+      const current =
+        grouped.get(tableNumber);
+
+      if (current) {
+        current.totalScore += score;
+        current.playerCount += 1;
+
+        if (
+          !current.horseName &&
+          player.horseName
+        ) {
+          current.horseName =
+            player.horseName;
+        }
+      } else {
+        grouped.set(
+          tableNumber,
+          {
             horseName:
-              data.horseName,
-            averageScore:
-              data.playerCount > 0
-                ? data.totalScore /
-                  data.playerCount
-                : 0,
-            playerCount:
-              data.playerCount,
-          })
-        )
-        .sort(
-          (a, b) =>
-            a.tableNumber -
-            b.tableNumber
+              player.horseName ||
+              `${tableNumber}卓`,
+            totalScore: score,
+            playerCount: 1,
+          }
         );
-    }, [players]);
+      }
+    });
+
+    return Array.from(
+      grouped.entries()
+    )
+      .map(
+        ([
+          tableNumber,
+          data,
+        ]) => ({
+          tableNumber,
+          horseName:
+            data.horseName ||
+            `${tableNumber}卓`,
+          averageScore:
+            data.playerCount > 0
+              ? data.totalScore /
+                data.playerCount
+              : 0,
+          playerCount:
+            data.playerCount,
+        })
+      )
+      .sort(
+        (a, b) =>
+          a.tableNumber -
+          b.tableNumber
+      );
+  }, [players]);
 
   useEffect(() => {
-    horsesRef.current =
-      horses;
+    horsesRef.current = horses;
   }, [horses]);
 
   useEffect(() => {
@@ -311,31 +286,29 @@ function GamePage() {
         started,
         newRaceId
       ) => {
-        setRaceStarted(
-          started
-        );
-
-        setRaceId(
-          newRaceId
-        );
+        setRaceStarted(started);
+        setRaceId(newRaceId);
       }
     );
   }, []);
 
+  // 重要：
+  // レース開始処理は raceStarted / raceId が
+  // 変わったときだけ実行する。
+  // ムチでplayersやhorsesが更新されても
+  // カウントダウンを再実行しない。
   useEffect(() => {
     if (!raceStarted) {
       setCount(3);
       setRanking([]);
 
-      motionsRef.current =
-        [];
+      motionsRef.current = [];
 
       finishedSentRef.current =
         new Set();
 
       elapsedRef.current = 0;
-      lastTimeRef.current =
-        null;
+      lastTimeRef.current = null;
 
       return;
     }
@@ -344,101 +317,51 @@ function GamePage() {
     setRanking([]);
 
     motionsRef.current =
-      [];
+      horsesRef.current.map(
+        (horse) => ({
+          tableNumber:
+            horse.tableNumber,
+          progress: 0,
+          finished: false,
+          seed:
+            horse.tableNumber *
+            1.731,
+        })
+      );
 
     finishedSentRef.current =
       new Set();
 
     elapsedRef.current = 0;
-    lastTimeRef.current =
-      null;
+    lastTimeRef.current = null;
 
-    setAllPlayersFinished(
+    void setAllPlayersFinished(
       false
     );
 
     let current = 3;
 
     const timer =
-      window.setInterval(
-        () => {
-          current -= 1;
+      window.setInterval(() => {
+        current -= 1;
 
-          setCount(
-            Math.max(
-              current,
-              0
-            )
+        setCount(
+          Math.max(current, 0)
+        );
+
+        if (current <= 0) {
+          window.clearInterval(
+            timer
           );
-
-          if (current <= 0) {
-            window.clearInterval(
-              timer
-            );
-          }
-        },
-        1000
-      );
+        }
+      }, 1000);
 
     return () => {
-      window.clearInterval(
-        timer
-      );
+      window.clearInterval(timer);
     };
   }, [
     raceStarted,
     raceId,
-  ]);
-
-  useEffect(() => {
-    if (
-      !raceStarted ||
-      count !== 0 ||
-      horses.length === 0
-    ) {
-      return;
-    }
-
-    if (
-      motionsRef.current
-        .length === 0
-    ) {
-      motionsRef.current =
-        horses.map(
-          horse => ({
-            tableNumber:
-              horse.tableNumber,
-            progress: 0,
-            finished: false,
-            seed:
-              horse.tableNumber *
-              1.731,
-          })
-        );
-    }
-
-    lastTimeRef.current =
-      performance.now();
-
-    elapsedRef.current = 0;
-
-    return () => {
-      if (
-        animationRef.current !==
-        null
-      ) {
-        cancelAnimationFrame(
-          animationRef.current
-        );
-
-        animationRef.current =
-          null;
-      }
-    };
-  }, [
-    raceStarted,
-    count,
-    horses.length,
   ]);
 
   useEffect(() => {
@@ -449,12 +372,10 @@ function GamePage() {
       return;
     }
 
-    const context =
-      canvas.getContext(
-        "2d"
-      );
+    const ctx =
+      canvas.getContext("2d");
 
-    if (!context) {
+    if (!ctx) {
       return;
     }
 
@@ -464,43 +385,34 @@ function GamePage() {
       const rect =
         canvas.getBoundingClientRect();
 
-      const dpr =
-        Math.min(
-          window.devicePixelRatio ||
-            1,
-          2
-        );
+      const dpr = Math.min(
+        window.devicePixelRatio || 1,
+        2
+      );
 
-      const targetWidth =
-        Math.max(
-          1,
-          Math.floor(
-            rect.width * dpr
-          )
-        );
+      const width = Math.max(
+        1,
+        Math.floor(
+          rect.width * dpr
+        )
+      );
 
-      const targetHeight =
-        Math.max(
-          1,
-          Math.floor(
-            rect.height * dpr
-          )
-        );
+      const height = Math.max(
+        1,
+        Math.floor(
+          rect.height * dpr
+        )
+      );
 
       if (
-        canvas.width !==
-          targetWidth ||
-        canvas.height !==
-          targetHeight
+        canvas.width !== width ||
+        canvas.height !== height
       ) {
-        canvas.width =
-          targetWidth;
-
-        canvas.height =
-          targetHeight;
+        canvas.width = width;
+        canvas.height = height;
       }
 
-      context.setTransform(
+      ctx.setTransform(
         dpr,
         0,
         0,
@@ -510,27 +422,21 @@ function GamePage() {
       );
     }
 
-    function roundRect(
-      ctx: CanvasRenderingContext2D,
+    function roundedRect(
       x: number,
       y: number,
       width: number,
       height: number,
       radius: number
     ) {
-      const r =
-        Math.min(
-          radius,
-          width / 2,
-          height / 2
-        );
+      const r = Math.min(
+        radius,
+        width / 2,
+        height / 2
+      );
 
       ctx.beginPath();
-
-      ctx.moveTo(
-        x + r,
-        y
-      );
+      ctx.moveTo(x + r, y);
 
       ctx.lineTo(
         x + width - r,
@@ -568,10 +474,7 @@ function GamePage() {
         y + height - r
       );
 
-      ctx.lineTo(
-        x,
-        y + r
-      );
+      ctx.lineTo(x, y + r);
 
       ctx.quadraticCurveTo(
         x,
@@ -583,16 +486,15 @@ function GamePage() {
       ctx.closePath();
     }
 
-    function drawBackground(
-      ctx: CanvasRenderingContext2D,
+    function drawSky(
       width: number,
       height: number,
-      cameraWorld: number
+      camera: number
     ) {
       const skyBottom =
-        height * 0.33;
+        height * 0.31;
 
-      const sky =
+      const gradient =
         ctx.createLinearGradient(
           0,
           0,
@@ -600,17 +502,17 @@ function GamePage() {
           skyBottom
         );
 
-      sky.addColorStop(
+      gradient.addColorStop(
         0,
-        "#75c8f4"
+        "#54b7ec"
       );
 
-      sky.addColorStop(
+      gradient.addColorStop(
         1,
-        "#d9f1fb"
+        "#ccecf9"
       );
 
-      ctx.fillStyle = sky;
+      ctx.fillStyle = gradient;
 
       ctx.fillRect(
         0,
@@ -620,79 +522,89 @@ function GamePage() {
       );
 
       ctx.fillStyle =
-        "rgba(255,255,255,0.75)";
+        "rgba(255,255,255,0.82)";
 
       for (
         let i = -1;
         i < 6;
         i += 1
       ) {
-        const cloudX =
-          (
-            i * 310 -
-            cameraWorld * 8
-          ) %
-            (width + 500) -
-          100;
+        const cycle =
+          width + 500;
 
-        const cloudY =
-          55 +
-          (i % 3) * 35;
+        let x =
+          i * 340 -
+          camera * 8;
+
+        x =
+          ((x % cycle) +
+            cycle) %
+            cycle -
+          150;
+
+        const y =
+          60 +
+          (i % 3) * 42;
 
         ctx.beginPath();
 
         ctx.arc(
-          cloudX,
-          cloudY,
+          x,
+          y,
           28,
           0,
           Math.PI * 2
         );
 
         ctx.arc(
-          cloudX + 32,
-          cloudY - 9,
-          38,
+          x + 35,
+          y - 12,
+          39,
           0,
           Math.PI * 2
         );
 
         ctx.arc(
-          cloudX + 72,
-          cloudY,
-          28,
+          x + 78,
+          y,
+          30,
           0,
           Math.PI * 2
         );
 
         ctx.fill();
       }
+    }
 
-      const standTop =
-        height * 0.18;
+    function drawGrandstand(
+      width: number,
+      height: number,
+      camera: number
+    ) {
+      const top =
+        height * 0.17;
 
-      const standBottom =
+      const bottom =
         height * 0.39;
 
       ctx.fillStyle =
-        "#dde3e8";
+        "#e4e8eb";
 
       ctx.fillRect(
         0,
-        standTop,
+        top,
         width,
-        standBottom -
-          standTop
+        bottom - top
       );
 
       ctx.fillStyle =
-        "#4c5964";
+        "#46545e";
 
       ctx.fillRect(
         0,
-        standTop,
+        top,
         width,
-        13
+        14
       );
 
       for (
@@ -701,58 +613,56 @@ function GamePage() {
         row += 1
       ) {
         const y =
-          standTop +
-          35 +
-          row * 24;
+          top +
+          42 +
+          row * 25;
 
         ctx.fillStyle =
           row % 2 === 0
-            ? "#758391"
-            : "#8997a3";
+            ? "#78858e"
+            : "#909aa1";
 
         ctx.fillRect(
           0,
           y,
           width,
-          11
+          10
         );
       }
 
-      const crowdOffset =
-        -(
-          cameraWorld * 12
-        ) % 36;
+      const offset =
+        -(camera * 11) % 38;
+
+      const crowdColors = [
+        "#c84343",
+        "#2864a8",
+        "#e6ae29",
+        "#3c824e",
+        "#754e93",
+        "#e87931",
+      ];
 
       for (
-        let x = crowdOffset;
-        x < width + 36;
-        x += 18
+        let x = offset - 40;
+        x < width + 40;
+        x += 19
       ) {
         for (
           let row = 0;
           row < 4;
           row += 1
         ) {
-          const y =
-            standTop +
-            48 +
-            row * 25;
-
           ctx.fillStyle =
-            [
-              "#d9544f",
-              "#3367aa",
-              "#f0b737",
-              "#397b4d",
-              "#6e4f8e",
-            ][
+            crowdColors[
               (
-                Math.floor(
-                  x / 18
+                Math.abs(
+                  Math.floor(
+                    x / 19
+                  )
                 ) +
                 row
               ) %
-                5
+                crowdColors.length
             ];
 
           ctx.beginPath();
@@ -760,7 +670,9 @@ function GamePage() {
           ctx.arc(
             x +
               (row % 2) * 7,
-            y,
+            top +
+              54 +
+              row * 25,
             4,
             0,
             Math.PI * 2
@@ -769,63 +681,71 @@ function GamePage() {
           ctx.fill();
         }
       }
+    }
 
-      const turfTop =
+    function drawTrack(
+      width: number,
+      height: number,
+      camera: number
+    ) {
+      const top =
         height * 0.38;
 
       const grass =
         ctx.createLinearGradient(
           0,
-          turfTop,
+          top,
           0,
           height
         );
 
       grass.addColorStop(
         0,
-        "#4d9e43"
+        "#55a74b"
+      );
+
+      grass.addColorStop(
+        0.55,
+        "#32843d"
       );
 
       grass.addColorStop(
         1,
-        "#1e672d"
+        "#176029"
       );
 
-      ctx.fillStyle =
-        grass;
+      ctx.fillStyle = grass;
 
       ctx.fillRect(
         0,
-        turfTop,
+        top,
         width,
-        height - turfTop
+        height - top
       );
 
       const stripeWidth =
         Math.max(
-          80,
-          width * 0.08
+          110,
+          width * 0.09
         );
 
-      const stripeOffset =
+      const offset =
         -(
-          cameraWorld *
+          camera *
           width *
-          0.012
+          0.015
         ) %
-        (
-          stripeWidth * 2
-        );
+        (stripeWidth * 2);
 
       ctx.globalAlpha =
-        0.09;
+        0.08;
 
       ctx.fillStyle =
         "#ffffff";
 
       for (
         let x =
-          stripeOffset -
+          offset -
           stripeWidth * 2;
         x <
         width +
@@ -835,22 +755,21 @@ function GamePage() {
       ) {
         ctx.fillRect(
           x,
-          turfTop,
+          top,
           stripeWidth,
-          height -
-            turfTop
+          height - top
         );
       }
 
       ctx.globalAlpha = 1;
 
       const railY =
-        height * 0.43;
+        height * 0.445;
 
       ctx.strokeStyle =
         "#ffffff";
 
-      ctx.lineWidth = 7;
+      ctx.lineWidth = 8;
 
       ctx.beginPath();
 
@@ -867,100 +786,118 @@ function GamePage() {
       ctx.stroke();
 
       ctx.strokeStyle =
-        "#d6d6d6";
+        "#dedede";
 
       ctx.lineWidth = 3;
 
-      const postOffset =
-        -(
-          cameraWorld * 18
-        ) % 95;
+      const railOffset =
+        -(camera * 19) % 105;
 
       for (
         let x =
-          postOffset - 95;
-        x < width + 95;
-        x += 95
+          railOffset - 105;
+        x < width + 105;
+        x += 105
       ) {
         ctx.beginPath();
 
         ctx.moveTo(
           x,
-          railY - 5
+          railY - 4
         );
 
         ctx.lineTo(
-          x - 15,
-          railY + 55
+          x - 18,
+          railY + 70
         );
 
         ctx.stroke();
       }
 
+      ctx.globalAlpha =
+        0.12;
+
       ctx.strokeStyle =
-        "rgba(255,255,255,0.17)";
+        "#ffffff";
 
       ctx.lineWidth = 2;
 
       for (
-        let i = 1;
-        i <= 4;
+        let i = 0;
+        i < 3;
         i += 1
       ) {
         const y =
-          turfTop +
-          (
-            (height -
-              turfTop) /
-            5
-          ) *
-            i;
+          height *
+          DEPTH_Y[i];
 
         ctx.beginPath();
 
         ctx.moveTo(
           0,
-          y
+          y + 37
         );
 
         ctx.lineTo(
           width,
-          y
+          y + 37
         );
 
         ctx.stroke();
       }
+
+      ctx.globalAlpha = 1;
+    }
+
+    function drawBackground(
+      width: number,
+      height: number,
+      camera: number
+    ) {
+      drawSky(
+        width,
+        height,
+        camera
+      );
+
+      drawGrandstand(
+        width,
+        height,
+        camera
+      );
+
+      drawTrack(
+        width,
+        height,
+        camera
+      );
     }
 
     function drawFinish(
-      ctx: CanvasRenderingContext2D,
       x: number,
+      width: number,
       height: number
     ) {
       if (
-        x < -100 ||
-        x >
-          ctx.canvas
-            .getBoundingClientRect()
-            .width +
-            100
+        x < -150 ||
+        x > width + 150
       ) {
         return;
       }
 
       const top =
-        height * 0.33;
+        height * 0.36;
 
       const bottom =
-        height * 0.94;
+        height * 0.97;
 
       ctx.fillStyle =
-        "rgba(0,0,0,0.16)";
+        "rgba(0,0,0,0.22)";
 
       ctx.fillRect(
-        x + 8,
+        x + 10,
         top,
-        13,
+        14,
         bottom - top
       );
 
@@ -968,56 +905,46 @@ function GamePage() {
         "#ffffff";
 
       ctx.fillRect(
-        x - 4,
+        x - 5,
         top,
-        8,
+        10,
         bottom - top
       );
 
-      const block = 12;
+      const block = 15;
 
       for (
         let y = top;
         y < bottom;
         y += block
       ) {
-        ctx.fillStyle =
+        const index =
           Math.floor(
-            (
-              y -
-              top
-            ) /
+            (y - top) /
               block
-          ) %
-            2 ===
-          0
+          );
+
+        ctx.fillStyle =
+          index % 2 === 0
             ? "#111111"
             : "#ffffff";
 
         ctx.fillRect(
-          x - 16,
+          x - 35,
           y,
-          12,
+          15,
           block
         );
 
         ctx.fillStyle =
-          Math.floor(
-            (
-              y -
-              top
-            ) /
-              block
-          ) %
-            2 ===
-          0
+          index % 2 === 0
             ? "#ffffff"
             : "#111111";
 
         ctx.fillRect(
-          x - 28,
+          x - 20,
           y,
-          12,
+          15,
           block
         );
       }
@@ -1025,22 +952,22 @@ function GamePage() {
       ctx.save();
 
       ctx.translate(
-        x - 50,
-        top - 10
+        x - 58,
+        top - 16
       );
 
       ctx.fillStyle =
-        "#111";
+        "#111111";
 
       ctx.font =
-        "900 18px sans-serif";
+        "900 22px sans-serif";
 
       ctx.textAlign =
         "center";
 
       ctx.fillText(
         "GOAL",
-        20,
+        18,
         0
       );
 
@@ -1048,7 +975,6 @@ function GamePage() {
     }
 
     function drawHorse(
-      ctx: CanvasRenderingContext2D,
       horse: HorseData,
       motion: RaceMotion,
       x: number,
@@ -1057,26 +983,28 @@ function GamePage() {
       time: number,
       color: string
     ) {
-      const speedPhase =
-        time * 0.012 +
+      const phase =
+        time * 0.015 +
         motion.seed;
 
-      const legSwing =
+      const strideA =
+        Math.sin(phase);
+
+      const strideB =
         Math.sin(
-          speedPhase
+          phase + Math.PI
         );
 
-      const legSwing2 =
+      const bob =
         Math.sin(
-          speedPhase +
-            Math.PI
-        );
+          phase * 2
+        ) * 2.2;
 
       ctx.save();
 
       ctx.translate(
         x,
-        y
+        y + bob * scale
       );
 
       ctx.scale(
@@ -1085,18 +1013,18 @@ function GamePage() {
       );
 
       ctx.globalAlpha =
-        0.22;
+        0.24;
 
       ctx.fillStyle =
-        "#102411";
+        "#0a2a12";
 
       ctx.beginPath();
 
       ctx.ellipse(
-        -2,
-        28,
-        48,
-        10,
+        0,
+        34,
+        64,
+        12,
         0,
         0,
         Math.PI * 2
@@ -1106,68 +1034,134 @@ function GamePage() {
 
       ctx.globalAlpha = 1;
 
-      const bodyColor =
-        "#6f3e23";
+      const body =
+        "#754225";
 
-      const darkBody =
-        "#4e2817";
+      const dark =
+        "#432313";
 
-      ctx.fillStyle =
-        bodyColor;
+      ctx.strokeStyle =
+        dark;
+
+      ctx.lineWidth = 6;
+
+      ctx.lineCap =
+        "round";
+
+      function leg(
+        startX: number,
+        swing: number,
+        direction: number
+      ) {
+        const kneeX =
+          startX +
+          swing *
+            18 *
+            direction;
+
+        const hoofX =
+          kneeX +
+          swing *
+            23 *
+            direction;
+
+        ctx.beginPath();
+
+        ctx.moveTo(
+          startX,
+          10
+        );
+
+        ctx.lineTo(
+          kneeX,
+          31
+        );
+
+        ctx.lineTo(
+          hoofX,
+          56
+        );
+
+        ctx.stroke();
+      }
+
+      leg(
+        -29,
+        strideA,
+        1
+      );
+
+      leg(
+        -13,
+        strideB,
+        -1
+      );
+
+      leg(
+        21,
+        strideB,
+        1
+      );
+
+      leg(
+        34,
+        strideA,
+        -1
+      );
+
+      ctx.fillStyle = body;
 
       ctx.beginPath();
 
       ctx.ellipse(
         0,
         0,
-        42,
-        21,
-        -0.08,
+        52,
+        25,
+        -0.05,
         0,
         Math.PI * 2
       );
 
       ctx.fill();
 
-      ctx.fillStyle =
-        darkBody;
+      ctx.fillStyle = dark;
 
       ctx.beginPath();
 
       ctx.moveTo(
-        27,
-        -8
+        32,
+        -10
       );
 
       ctx.lineTo(
-        47,
-        -40
+        55,
+        -48
       );
 
       ctx.lineTo(
-        59,
-        -35
+        68,
+        -42
       );
 
       ctx.lineTo(
-        38,
-        2
+        44,
+        6
       );
 
       ctx.closePath();
 
       ctx.fill();
 
-      ctx.fillStyle =
-        bodyColor;
+      ctx.fillStyle = body;
 
       ctx.beginPath();
 
       ctx.ellipse(
-        58,
-        -39,
-        17,
-        10,
+        69,
+        -47,
+        20,
+        12,
         -0.08,
         0,
         Math.PI * 2
@@ -1178,150 +1172,60 @@ function GamePage() {
       ctx.beginPath();
 
       ctx.moveTo(
-        58,
-        -48
+        69,
+        -56
       );
 
       ctx.lineTo(
-        63,
-        -62
+        76,
+        -72
       );
 
       ctx.lineTo(
-        68,
-        -46
+        82,
+        -52
       );
 
       ctx.fill();
 
-      ctx.strokeStyle =
-        "#2b170d";
-
-      ctx.lineWidth = 5;
-
-      ctx.lineCap =
-        "round";
-
-      const drawLeg = (
-        hipX: number,
-        hipY: number,
-        swing: number,
-        reverse: boolean
-      ) => {
-        const direction =
-          reverse
-            ? -1
-            : 1;
-
-        const kneeX =
-          hipX +
-          swing *
-            16 *
-            direction;
-
-        const kneeY =
-          hipY + 20;
-
-        const hoofX =
-          kneeX +
-          swing *
-            20 *
-            direction;
-
-        const hoofY =
-          hipY + 43;
-
-        ctx.beginPath();
-
-        ctx.moveTo(
-          hipX,
-          hipY
-        );
-
-        ctx.lineTo(
-          kneeX,
-          kneeY
-        );
-
-        ctx.lineTo(
-          hoofX,
-          hoofY
-        );
-
-        ctx.stroke();
-      };
-
-      drawLeg(
-        -25,
-        10,
-        legSwing,
-        false
-      );
-
-      drawLeg(
-        -10,
-        12,
-        legSwing2,
-        true
-      );
-
-      drawLeg(
-        19,
-        10,
-        legSwing2,
-        false
-      );
-
-      drawLeg(
-        29,
-        7,
-        legSwing,
-        true
-      );
-
-      ctx.strokeStyle =
-        "#2d1b12";
-
-      ctx.lineWidth = 6;
+      ctx.strokeStyle = dark;
+      ctx.lineWidth = 7;
 
       ctx.beginPath();
 
       ctx.moveTo(
-        -38,
-        -8
+        -46,
+        -5
       );
 
       ctx.quadraticCurveTo(
-        -62,
-        -5 +
-          legSwing * 5,
         -72,
-        -21 +
-          legSwing * 7
+        -3 + strideA * 5,
+        -85,
+        -23 + strideA * 8
       );
 
       ctx.stroke();
 
-      ctx.fillStyle =
-        color;
+      ctx.fillStyle = color;
 
       ctx.fillRect(
-        -12,
-        -20,
-        30,
-        21
+        -15,
+        -23,
+        36,
+        25
       );
 
       ctx.strokeStyle =
-        "#111";
+        "#111111";
 
       ctx.lineWidth = 2;
 
       ctx.strokeRect(
-        -12,
-        -20,
-        30,
-        21
+        -15,
+        -23,
+        36,
+        25
       );
 
       ctx.fillStyle =
@@ -1330,7 +1234,7 @@ function GamePage() {
           : "#111111";
 
       ctx.font =
-        "900 13px sans-serif";
+        "900 15px sans-serif";
 
       ctx.textAlign =
         "center";
@@ -1343,38 +1247,40 @@ function GamePage() {
           horse.tableNumber
         ),
         3,
-        -9
+        -10
       );
 
       ctx.save();
 
-      ctx.rotate(
-        -0.22
+      ctx.translate(
+        8,
+        -30
       );
 
-      ctx.fillStyle =
-        color;
+      ctx.rotate(-0.23);
+
+      ctx.fillStyle = color;
 
       ctx.beginPath();
 
       ctx.moveTo(
-        2,
-        -43
+        -4,
+        -11
       );
 
       ctx.lineTo(
-        28,
-        -37
+        29,
+        -5
       );
 
       ctx.lineTo(
-        20,
-        -14
+        21,
+        25
       );
 
       ctx.lineTo(
-        -5,
-        -23
+        -10,
+        15
       );
 
       ctx.closePath();
@@ -1382,29 +1288,28 @@ function GamePage() {
       ctx.fill();
 
       ctx.fillStyle =
-        "#f2bd8d";
+        "#f0bb88";
 
       ctx.beginPath();
 
       ctx.arc(
-        17,
-        -51,
-        8,
+        20,
+        -20,
+        9,
         0,
         Math.PI * 2
       );
 
       ctx.fill();
 
-      ctx.fillStyle =
-        color;
+      ctx.fillStyle = color;
 
       ctx.beginPath();
 
       ctx.arc(
-        16,
-        -56,
-        9,
+        19,
+        -25,
+        10,
         Math.PI,
         Math.PI * 2
       );
@@ -1412,79 +1317,84 @@ function GamePage() {
       ctx.fill();
 
       ctx.strokeStyle =
-        "#202020";
+        "#252525";
 
       ctx.lineWidth = 3;
 
       ctx.beginPath();
 
       ctx.moveTo(
-        6,
-        -23
+        7,
+        12
       );
 
       ctx.lineTo(
-        37,
-        -10
+        47,
+        27
       );
 
       ctx.stroke();
 
       ctx.restore();
-
       ctx.restore();
 
       const labelWidth =
         clamp(
-          118 * scale,
-          86,
-          135
+          136 * scale,
+          112,
+          178
         );
 
       const labelHeight =
         clamp(
-          30 * scale,
-          23,
-          31
+          31 * scale,
+          27,
+          39
         );
-
-      const labelX =
-        x -
-        labelWidth / 2;
 
       const labelY =
         y -
-        77 * scale;
+        100 * scale;
 
-      roundRect(
-        ctx,
-        labelX,
+      roundedRect(
+        x - labelWidth / 2,
         labelY,
         labelWidth,
         labelHeight,
-        7
+        8
       );
 
       ctx.fillStyle =
-        "rgba(255,255,255,0.94)";
+        "rgba(255,255,255,0.95)";
 
       ctx.fill();
 
       ctx.strokeStyle =
         color;
 
-      ctx.lineWidth = 3;
-
+      ctx.lineWidth = 4;
       ctx.stroke();
 
+      let name =
+        horse.horseName ||
+        `${horse.tableNumber}卓`;
+
+      if (name.length > 9) {
+        name =
+          `${name.slice(
+            0,
+            8
+          )}…`;
+      }
+
       ctx.fillStyle =
-        "#151515";
+        "#141414";
 
       ctx.font =
-        `800 ${clamp(
-          13 * scale,
-          10,
-          14
+        `900 ${clamp(
+          14 * scale,
+          12,
+          18
         )}px sans-serif`;
 
       ctx.textAlign =
@@ -1492,20 +1402,6 @@ function GamePage() {
 
       ctx.textBaseline =
         "middle";
-
-      let name =
-        horse.horseName ||
-        `${horse.tableNumber}卓`;
-
-      if (
-        name.length > 10
-      ) {
-        name =
-          `${name.slice(
-            0,
-            9
-          )}…`;
-      }
 
       ctx.fillText(
         `${horse.tableNumber} ${name}`,
@@ -1515,10 +1411,8 @@ function GamePage() {
       );
     }
 
-    function drawRaceInfo(
-      ctx: CanvasRenderingContext2D,
+    function drawRankingPanel(
       width: number,
-      height: number,
       motions: RaceMotion[],
       horseData: HorseData[]
     ) {
@@ -1528,39 +1422,35 @@ function GamePage() {
         return;
       }
 
-      const ordered =
+      const sorted =
         [...motions].sort(
           (a, b) =>
             b.progress -
             a.progress
         );
 
+      const shown =
+        sorted.slice(0, 5);
+
       const panelWidth =
         clamp(
           width * 0.18,
-          170,
-          255
+          190,
+          270
         );
 
       const panelX =
         width -
         panelWidth -
-        18;
+        20;
 
-      const panelY = 18;
-
-      const rows =
-        Math.min(
-          ordered.length,
-          5
-        );
+      const panelY = 20;
 
       const panelHeight =
-        49 +
-        rows * 34;
+        52 +
+        shown.length * 36;
 
-      roundRect(
-        ctx,
+      roundedRect(
         panelX,
         panelY,
         panelWidth,
@@ -1569,12 +1459,15 @@ function GamePage() {
       );
 
       ctx.fillStyle =
-        "rgba(5,16,12,0.78)";
+        "rgba(5,14,11,0.82)";
 
       ctx.fill();
 
       ctx.fillStyle =
         "#ffffff";
+
+      ctx.font =
+        "900 17px sans-serif";
 
       ctx.textAlign =
         "left";
@@ -1582,166 +1475,274 @@ function GamePage() {
       ctx.textBaseline =
         "middle";
 
-      ctx.font =
-        "900 17px sans-serif";
-
       ctx.fillText(
         "CURRENT ORDER",
-        panelX + 14,
+        panelX + 15,
         panelY + 22
       );
 
-      ordered
-        .slice(
-          0,
-          rows
-        )
-        .forEach(
-          (
-            motion,
-            index
-          ) => {
-            const horse =
-              horseData.find(
-                item =>
-                  item.tableNumber ===
-                  motion.tableNumber
-              );
-
-            if (!horse) {
-              return;
-            }
-
-            const y =
-              panelY +
-              51 +
-              index * 34;
-
-            const color =
-              HORSE_COLORS[
-                (
-                  horse.tableNumber -
-                  1
-                ) %
-                  HORSE_COLORS.length
-              ];
-
-            ctx.fillStyle =
-              color;
-
-            ctx.beginPath();
-
-            ctx.arc(
-              panelX + 19,
-              y,
-              10,
-              0,
-              Math.PI * 2
+      shown.forEach(
+        (motion, index) => {
+          const horse =
+            horseData.find(
+              (item) =>
+                item.tableNumber ===
+                motion.tableNumber
             );
 
-            ctx.fill();
-
-            ctx.fillStyle =
-              color ===
-              "#222222"
-                ? "#ffffff"
-                : "#111111";
-
-            ctx.font =
-              "900 11px sans-serif";
-
-            ctx.textAlign =
-              "center";
-
-            ctx.fillText(
-              String(
-                horse.tableNumber
-              ),
-              panelX + 19,
-              y
-            );
-
-            ctx.fillStyle =
-              "#ffffff";
-
-            ctx.font =
-              "700 14px sans-serif";
-
-            ctx.textAlign =
-              "left";
-
-            let name =
-              horse.horseName;
-
-            if (
-              name.length > 11
-            ) {
-              name =
-                `${name.slice(
-                  0,
-                  10
-                )}…`;
-            }
-
-            ctx.fillText(
-              `${index + 1}. ${name}`,
-              panelX + 38,
-              y
-            );
+          if (!horse) {
+            return;
           }
-        );
 
-      ctx.fillStyle =
-        "rgba(0,0,0,0.68)";
+          const y =
+            panelY +
+            55 +
+            index * 36;
 
-      roundRect(
-        ctx,
-        18,
-        18,
-        180,
-        55,
-        10
+          const color =
+            getColor(
+              horse.tableNumber
+            );
+
+          ctx.fillStyle = color;
+
+          ctx.beginPath();
+
+          ctx.arc(
+            panelX + 20,
+            y,
+            11,
+            0,
+            Math.PI * 2
+          );
+
+          ctx.fill();
+
+          ctx.fillStyle =
+            color === "#222222"
+              ? "#ffffff"
+              : "#111111";
+
+          ctx.font =
+            "900 11px sans-serif";
+
+          ctx.textAlign =
+            "center";
+
+          ctx.fillText(
+            String(
+              horse.tableNumber
+            ),
+            panelX + 20,
+            y
+          );
+
+          let horseName =
+            horse.horseName;
+
+          if (
+            horseName.length >
+            10
+          ) {
+            horseName =
+              `${horseName.slice(
+                0,
+                9
+              )}…`;
+          }
+
+          ctx.fillStyle =
+            "#ffffff";
+
+          ctx.font =
+            "800 14px sans-serif";
+
+          ctx.textAlign =
+            "left";
+
+          ctx.fillText(
+            `${index + 1}. ${horseName}`,
+            panelX + 42,
+            y
+          );
+        }
       );
-
-      ctx.fill();
-
-      ctx.fillStyle =
-        "#ffffff";
-
-      ctx.textAlign =
-        "left";
-
-      ctx.font =
-        "900 17px sans-serif";
-
-      ctx.fillText(
-        "WEDDING DERBY",
-        31,
-        39
-      );
-
-      ctx.font =
-        "700 13px sans-serif";
-
-      ctx.fillStyle =
-        "#e4e4e4";
-
-      ctx.fillText(
-        "芝 1600m",
-        31,
-        59
-      );
-
-      void height;
     }
 
-    function drawFrame(
+    function updateRace(
+      deltaSeconds: number
+    ) {
+      const horseData =
+        horsesRef.current;
+
+      const motions =
+        motionsRef.current;
+
+      if (
+        !raceStarted ||
+        count !== 0 ||
+        horseData.length === 0 ||
+        motions.length === 0
+      ) {
+        return;
+      }
+
+      elapsedRef.current +=
+        deltaSeconds;
+
+      const fieldAverage =
+        horseData.reduce(
+          (sum, horse) =>
+            sum +
+            horse.averageScore,
+          0
+        ) /
+        horseData.length;
+
+      const newlyFinished:
+        number[] = [];
+
+      motions.forEach(
+        (motion) => {
+          if (motion.finished) {
+            return;
+          }
+
+          const horse =
+            horseData.find(
+              (item) =>
+                item.tableNumber ===
+                motion.tableNumber
+            );
+
+          if (!horse) {
+            return;
+          }
+
+          const scoreDifference =
+            horse.averageScore -
+            fieldAverage;
+
+          let scoreEffect =
+            Math.tanh(
+              scoreDifference / 18
+            ) * 0.065;
+
+          const raceRatio =
+            motion.progress / 100;
+
+          if (raceRatio > 0.82) {
+            scoreEffect *= 1.3;
+          }
+
+          const wave =
+            Math.sin(
+              elapsedRef.current *
+                0.58 +
+                motion.seed
+            ) *
+              0.021 +
+            Math.sin(
+              elapsedRef.current *
+                1.21 +
+                motion.seed * 1.8
+            ) *
+              0.011;
+
+          const target =
+            Math.min(
+              99,
+              (elapsedRef.current /
+                90) *
+                100
+            );
+
+          const correction =
+            clamp(
+              (target -
+                motion.progress) *
+                0.006,
+              -0.05,
+              0.07
+            );
+
+          const multiplier =
+            clamp(
+              1 +
+                scoreEffect +
+                wave +
+                correction,
+              0.86,
+              1.15
+            );
+
+          motion.progress +=
+            BASE_SPEED *
+            multiplier *
+            deltaSeconds;
+
+          if (
+            elapsedRef.current >
+              84 &&
+            motion.progress < 93
+          ) {
+            motion.progress +=
+              BASE_SPEED *
+              0.07 *
+              deltaSeconds;
+          }
+
+          if (
+            motion.progress >=
+            100
+          ) {
+            motion.progress = 100;
+            motion.finished = true;
+
+            newlyFinished.push(
+              motion.tableNumber
+            );
+          }
+        }
+      );
+
+      newlyFinished.forEach(
+        (tableNumber) => {
+          if (
+            finishedSentRef.current.has(
+              tableNumber
+            )
+          ) {
+            return;
+          }
+
+          finishedSentRef.current.add(
+            tableNumber
+          );
+
+          setRanking(
+            (previous) =>
+              previous.includes(
+                tableNumber
+              )
+                ? previous
+                : [
+                    ...previous,
+                    tableNumber,
+                  ]
+          );
+
+          void finishTable(
+            tableNumber
+          );
+        }
+      );
+    }
+
+    function render(
       now: number
     ) {
-      if (
-        disposed ||
-        !canvasRef.current
-      ) {
+      if (disposed) {
         return;
       }
 
@@ -1756,335 +1757,87 @@ function GamePage() {
       const height =
         rect.height;
 
-      const activeHorses =
-        horsesRef.current;
+      if (
+        lastTimeRef.current ===
+        null
+      ) {
+        lastTimeRef.current =
+          now;
+      }
+
+      const deltaSeconds =
+        clamp(
+          (now -
+            lastTimeRef.current) /
+            1000,
+          0,
+          0.05
+        );
+
+      lastTimeRef.current = now;
+
+      updateRace(
+        deltaSeconds
+      );
 
       const motions =
         motionsRef.current;
 
-      if (
-        raceStarted &&
-        count === 0 &&
-        motions.length > 0
-      ) {
-        if (
-          lastTimeRef.current ===
-          null
-        ) {
-          lastTimeRef.current =
-            now;
-        }
-
-        const deltaSeconds =
-          clamp(
-            (
-              now -
-              lastTimeRef.current
-            ) /
-              1000,
-            0,
-            0.05
-          );
-
-        lastTimeRef.current =
-          now;
-
-        elapsedRef.current +=
-          deltaSeconds;
-
-        const scoreValues =
-          activeHorses.map(
-            horse =>
-              horse.averageScore
-          );
-
-        const fieldAverage =
-          scoreValues.length > 0
-            ? scoreValues.reduce(
-                (
-                  total,
-                  value
-                ) =>
-                  total +
-                  value,
-                0
-              ) /
-              scoreValues.length
-            : 0;
-
-        const newlyFinished:
-          number[] = [];
-
-        motions.forEach(
-          motion => {
-            if (
-              motion.finished
-            ) {
-              return;
-            }
-
-            const horse =
-              activeHorses.find(
-                item =>
-                  item.tableNumber ===
-                  motion.tableNumber
-              );
-
-            if (!horse) {
-              return;
-            }
-
-            const scoreDifference =
-              horse.averageScore -
-              fieldAverage;
-
-            let scoreEffect =
-              Math.tanh(
-                scoreDifference /
-                  18
-              ) * 0.065;
-
-            const raceProgress =
-              motion.progress /
-              100;
-
-            if (
-              raceProgress >
-              0.84
-            ) {
-              scoreEffect *=
-                1.35;
-            }
-
-            const naturalWave =
-              (
-                Math.sin(
-                  elapsedRef.current *
-                    0.57 +
-                    motion.seed
-                ) *
-                  0.022 +
-                Math.sin(
-                  elapsedRef.current *
-                    1.13 +
-                    motion.seed *
-                      2
-                ) *
-                  0.012
-              ) *
-              (
-                raceProgress >
-                0.84
-                  ? 0.45
-                  : 1
-              );
-
-            const idealProgress =
-              Math.min(
-                99,
-                (
-                  elapsedRef.current /
-                  90
-                ) *
-                  100
-              );
-
-            const paceCorrection =
-              clamp(
-                (
-                  idealProgress -
-                  motion.progress
-                ) *
-                  0.006,
-                -0.05,
-                0.07
-              );
-
-            const multiplier =
-              clamp(
-                1 +
-                  scoreEffect +
-                  naturalWave +
-                  paceCorrection,
-                0.86,
-                1.15
-              );
-
-            motion.progress +=
-              BASE_SPEED *
-              multiplier *
-              deltaSeconds;
-
-            if (
-              elapsedRef.current >
-                84 &&
-              motion.progress <
-                92
-            ) {
-              motion.progress +=
-                BASE_SPEED *
-                0.08 *
-                deltaSeconds;
-            }
-
-            if (
-              motion.progress >=
-              100
-            ) {
-              motion.progress =
-                100;
-
-              motion.finished =
-                true;
-
-              newlyFinished.push(
-                motion.tableNumber
-              );
-            }
-          }
-        );
-
-        if (
-          newlyFinished.length >
-          0
-        ) {
-          newlyFinished.sort(
-            (a, b) => {
-              const ma =
-                motions.find(
-                  item =>
-                    item.tableNumber ===
-                    a
-                );
-
-              const mb =
-                motions.find(
-                  item =>
-                    item.tableNumber ===
-                    b
-                );
-
-              return (
-                (
-                  mb?.progress ??
-                  0
-                ) -
-                (
-                  ma?.progress ??
-                  0
-                )
-              );
-            }
-          );
-
-          newlyFinished.forEach(
-            tableNumber => {
-              if (
-                finishedSentRef.current.has(
-                  tableNumber
-                )
-              ) {
-                return;
-              }
-
-              finishedSentRef.current.add(
-                tableNumber
-              );
-
-              setRanking(
-                previous =>
-                  previous.includes(
-                    tableNumber
-                  )
-                    ? previous
-                    : [
-                        ...previous,
-                        tableNumber,
-                      ]
-              );
-
-              finishTable(
-                tableNumber
-              );
-            }
-          );
-        }
-      }
-
       const leader =
-        motionsRef.current
-          .length > 0
+        motions.length > 0
           ? Math.max(
-              ...motionsRef.current.map(
-                motion =>
+              ...motions.map(
+                (motion) =>
                   motion.progress
               )
             )
           : 0;
 
-      const cameraWorld =
-        leader < 42
+      const camera =
+        leader < 34
           ? 0
           : clamp(
-              leader - 42,
+              leader - 34,
               0,
-              52
+              62
             );
 
       drawBackground(
-        context,
         width,
         height,
-        cameraWorld
+        camera
       );
 
       const worldScale =
-        width / 70;
+        width / 74;
 
       const leftMargin =
-        width * 0.075;
+        width * 0.085;
 
       const finishX =
         leftMargin +
-        (
-          100 -
-          cameraWorld
-        ) *
+        (100 - camera) *
           worldScale;
 
       drawFinish(
-        context,
         finishX,
+        width,
         height
       );
 
-      const horseCount =
-        Math.max(
-          motionsRef.current
-            .length,
-          1
-        );
-
-      const trackTop =
-        height * 0.49;
-
-      const trackBottom =
-        height * 0.91;
-
-      const trackHeight =
-        trackBottom -
-        trackTop;
+      const horseData =
+        horsesRef.current;
 
       const drawable =
-        motionsRef.current
+        motions
           .map(
             (
               motion,
               index
             ) => {
               const horse =
-                horsesRef.current.find(
-                  item =>
+                horseData.find(
+                  (item) =>
                     item.tableNumber ===
                     motion.tableNumber
                 );
@@ -2093,96 +1846,123 @@ function GamePage() {
                 return null;
               }
 
-              const slot =
-                horseCount <= 1
-                  ? 0.5
-                  : index /
-                    (
-                      horseCount -
-                      1
-                    );
+              const depth =
+                index % 3;
+
+              const groupIndex =
+                Math.floor(
+                  index / 3
+                );
+
+              const groupShift =
+                [
+                  0,
+                  -12,
+                  12,
+                  -6,
+                ][
+                  groupIndex % 4
+                ];
 
               const y =
-                trackTop +
-                slot *
-                  trackHeight;
+                height *
+                  DEPTH_Y[
+                    depth
+                  ] +
+                groupShift;
 
-              const scale =
-                0.62 +
-                slot * 0.34;
+              const visualOffset =
+                [
+                  0,
+                  -9,
+                  9,
+                  -4,
+                ][
+                  groupIndex % 4
+                ];
 
               const x =
                 leftMargin +
                 (
                   motion.progress -
-                  cameraWorld
+                  camera
                 ) *
-                  worldScale;
+                  worldScale +
+                visualOffset;
 
               return {
                 horse,
                 motion,
+                depth,
                 x,
                 y,
-                scale,
+                scale:
+                  DEPTH_SCALE[
+                    depth
+                  ],
               };
             }
           )
           .filter(
             (
-              item
-            ): item is NonNullable<
-              typeof item
+              value
+            ): value is NonNullable<
+              typeof value
             > =>
-              item !== null
+              value !== null
           )
           .sort(
-            (a, b) =>
-              a.y - b.y
+            (a, b) => {
+              if (
+                a.depth !==
+                b.depth
+              ) {
+                return (
+                  a.depth -
+                  b.depth
+                );
+              }
+
+              return (
+                a.x - b.x
+              );
+            }
           );
 
       drawable.forEach(
-        item => {
-          const color =
-            HORSE_COLORS[
-              (
-                item.horse
-                  .tableNumber -
-                1
-              ) %
-                HORSE_COLORS.length
-            ];
-
+        (item) => {
           drawHorse(
-            context,
             item.horse,
             item.motion,
             item.x,
             item.y,
             item.scale,
             now,
-            color
+            getColor(
+              item.horse
+                .tableNumber
+            )
           );
         }
       );
 
-      drawRaceInfo(
-        context,
+      drawRankingPanel(
         width,
-        height,
-        motionsRef.current,
-        horsesRef.current
+        motions,
+        horseData
       );
 
       animationRef.current =
         requestAnimationFrame(
-          drawFrame
+          render
         );
     }
 
+    resizeCanvas();
+
     animationRef.current =
       requestAnimationFrame(
-        drawFrame
+        render
       );
 
     window.addEventListener(
@@ -2205,6 +1985,9 @@ function GamePage() {
         cancelAnimationFrame(
           animationRef.current
         );
+
+        animationRef.current =
+          null;
       }
     };
   }, [
@@ -2215,7 +1998,7 @@ function GamePage() {
   const winner =
     ranking.length > 0
       ? horses.find(
-          horse =>
+          (horse) =>
             horse.tableNumber ===
             ranking[0]
         )
@@ -2229,13 +2012,13 @@ function GamePage() {
   return (
     <div
       style={{
+        position: "relative",
         width: "100vw",
         height: "100vh",
         margin: 0,
         padding: 0,
         overflow: "hidden",
         background: "#07130c",
-        position: "relative",
         fontFamily:
           '"Hiragino Kaku Gothic ProN", "Yu Gothic", sans-serif',
       }}
@@ -2243,43 +2026,42 @@ function GamePage() {
       <canvas
         ref={canvasRef}
         style={{
-          display: "block",
           width: "100%",
           height: "100%",
+          display: "block",
         }}
       />
 
       <div
         style={{
           position: "absolute",
+          top: "16px",
           left: "50%",
-          top: "18px",
           transform:
             "translateX(-50%)",
-          zIndex: 15,
+          zIndex: 10,
           color: "#ffffff",
           textAlign: "center",
-          pointerEvents: "none",
           textShadow:
-            "0 2px 6px rgba(0,0,0,0.9)",
+            "0 3px 8px rgba(0,0,0,0.85)",
+          pointerEvents: "none",
         }}
       >
         <div
           style={{
             fontSize:
-              "clamp(20px, 2.4vw, 38px)",
+              "clamp(21px, 2.5vw, 39px)",
             fontWeight: 900,
           }}
         >
-          {eventInfo.title}
+          💍 {eventInfo.title}
         </div>
 
         <div
           style={{
             fontSize:
-              "clamp(12px, 1.3vw, 19px)",
-            fontWeight: 700,
-            marginTop: "2px",
+              "clamp(12px, 1.3vw, 20px)",
+            fontWeight: 800,
           }}
         >
           {eventInfo.groom}
@@ -2297,29 +2079,32 @@ function GamePage() {
             alignItems: "center",
             justifyContent:
               "center",
+            zIndex: 30,
             background:
               "rgba(0,0,0,0.48)",
-            zIndex: 30,
           }}
         >
           <div
             style={{
-              background:
-                "rgba(255,255,255,0.96)",
+              width:
+                "min(560px, 80vw)",
+              padding:
+                "34px 44px",
+              boxSizing:
+                "border-box",
+              textAlign: "center",
               borderRadius:
                 "24px",
-              padding:
-                "34px 56px",
-              textAlign:
-                "center",
+              background:
+                "rgba(255,255,255,0.96)",
               boxShadow:
-                "0 16px 60px rgba(0,0,0,0.45)",
+                "0 18px 60px rgba(0,0,0,0.48)",
             }}
           >
             <div
               style={{
-                fontSize:
-                  "72px",
+                fontSize: "70px",
+                lineHeight: 1,
               }}
             >
               🏇
@@ -2328,7 +2113,7 @@ function GamePage() {
             <h1
               style={{
                 margin:
-                  "8px 0 12px",
+                  "14px 0 8px",
               }}
             >
               レース待機中
@@ -2364,20 +2149,20 @@ function GamePage() {
                 "center",
               zIndex: 40,
               background:
-                "rgba(0,0,0,0.32)",
+                "rgba(0,0,0,0.33)",
             }}
           >
             <div
               style={{
                 fontSize:
-                  "clamp(150px, 25vw, 330px)",
+                  "clamp(160px, 26vw, 340px)",
                 lineHeight: 1,
                 fontWeight: 900,
                 color: "#ffffff",
                 WebkitTextStroke:
                   "6px #111111",
                 textShadow:
-                  "0 12px 30px rgba(0,0,0,0.6)",
+                  "0 14px 35px rgba(0,0,0,0.65)",
               }}
             >
               {count}
@@ -2396,23 +2181,23 @@ function GamePage() {
               bottom: "18px",
               transform:
                 "translateX(-50%)",
-              background:
-                "rgba(150,0,0,0.88)",
-              color: "#ffffff",
-              border:
-                "2px solid rgba(255,255,255,0.8)",
+              zIndex: 20,
+              padding:
+                "8px 28px",
               borderRadius:
                 "999px",
-              padding:
-                "7px 24px",
+              border:
+                "2px solid rgba(255,255,255,0.8)",
+              background:
+                "rgba(145,0,0,0.9)",
+              color: "#ffffff",
               fontWeight: 900,
               fontSize:
-                "clamp(14px, 1.6vw, 22px)",
+                "clamp(15px, 1.6vw, 23px)",
               letterSpacing:
                 "0.08em",
-              zIndex: 12,
               boxShadow:
-                "0 4px 14px rgba(0,0,0,0.35)",
+                "0 5px 16px rgba(0,0,0,0.4)",
               pointerEvents:
                 "none",
             }}
@@ -2428,145 +2213,139 @@ function GamePage() {
               position:
                 "absolute",
               inset: 0,
+              zIndex: 50,
               display: "flex",
               alignItems:
                 "center",
               justifyContent:
                 "center",
               background:
-                "rgba(0,0,0,0.72)",
-              zIndex: 50,
+                "rgba(0,0,0,0.73)",
             }}
           >
             <div
               style={{
                 width:
-                  "min(860px, 86vw)",
+                  "min(900px, 88vw)",
                 maxHeight:
                   "86vh",
-                overflow:
-                  "auto",
-                background:
-                  "linear-gradient(135deg, #fff6c9, #ffffff)",
-                border:
-                  "5px solid #d7b44a",
-                borderRadius:
-                  "28px",
-                padding:
-                  "28px 42px",
+                overflow: "auto",
                 boxSizing:
                   "border-box",
+                padding:
+                  "30px 44px",
                 textAlign:
                   "center",
+                borderRadius:
+                  "30px",
+                border:
+                  "5px solid #d5b245",
+                background:
+                  "linear-gradient(135deg, #fff3bd, #ffffff)",
                 boxShadow:
-                  "0 18px 70px rgba(0,0,0,0.65)",
-              }}
-          >
-            <div
-              style={{
-                fontSize:
-                  "72px",
-                lineHeight: 1,
+                  "0 20px 75px rgba(0,0,0,0.68)",
               }}
             >
-              🏆
-            </div>
+              <div
+                style={{
+                  fontSize:
+                    "76px",
+                  lineHeight: 1,
+                }}
+              >
+                🏆
+              </div>
 
-            <div
-              style={{
-                fontSize:
-                  "clamp(22px, 3vw, 38px)",
-                fontWeight: 900,
-                marginTop:
-                  "10px",
-              }}
-            >
-              WINNER
-            </div>
+              <div
+                style={{
+                  marginTop:
+                    "8px",
+                  fontSize:
+                    "clamp(23px, 3vw, 40px)",
+                  fontWeight: 900,
+                }}
+              >
+                WINNER
+              </div>
 
-            <div
-              style={{
-                margin:
-                  "8px 0 20px",
-                fontSize:
-                  "clamp(34px, 5vw, 64px)",
-                fontWeight: 900,
-              }}
-            >
-              {winner.tableNumber}
-              卓{" "}
-              {winner.horseName}
-            </div>
+              <div
+                style={{
+                  margin:
+                    "8px 0 22px",
+                  fontSize:
+                    "clamp(36px, 5vw, 66px)",
+                  fontWeight: 900,
+                }}
+              >
+                {winner.tableNumber}
+                卓{" "}
+                {winner.horseName}
+              </div>
 
-            <div
-              style={{
-                display:
-                  "grid",
-                gridTemplateColumns:
-                  "repeat(2, minmax(0, 1fr))",
-                gap:
-                  "7px 24px",
-                borderTop:
-                  "1px solid #d4c58f",
-                paddingTop:
-                  "18px",
-                textAlign:
-                  "left",
-              }}
-            >
-              {ranking.map(
-                (
-                  tableNumber,
-                  index
-                ) => {
-                  const horse =
-                    horses.find(
-                      item =>
-                        item.tableNumber ===
-                        tableNumber
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns:
+                    "repeat(2, minmax(0, 1fr))",
+                  gap:
+                    "8px 24px",
+                  paddingTop:
+                    "18px",
+                  borderTop:
+                    "1px solid #cbbb81",
+                  textAlign:
+                    "left",
+                }}
+              >
+                {ranking.map(
+                  (
+                    tableNumber,
+                    index
+                  ) => {
+                    const horse =
+                      horses.find(
+                        (item) =>
+                          item.tableNumber ===
+                          tableNumber
+                      );
+
+                    return (
+                      <div
+                        key={
+                          tableNumber
+                        }
+                        style={{
+                          padding:
+                            "6px 8px",
+                          fontSize:
+                            "clamp(14px, 1.5vw, 20px)",
+                          fontWeight:
+                            index < 3
+                              ? 900
+                              : 700,
+                        }}
+                      >
+                        {index === 0
+                          ? "🥇"
+                          : index === 1
+                            ? "🥈"
+                            : index === 2
+                              ? "🥉"
+                              : `${index + 1}位`}
+                        {"　"}
+                        {tableNumber}
+                        卓{" "}
+                        {
+                          horse?.horseName
+                        }
+                      </div>
                     );
-
-                  return (
-                    <div
-                      key={
-                        tableNumber
-                      }
-                      style={{
-                        fontSize:
-                          "clamp(14px, 1.5vw, 19px)",
-                        fontWeight:
-                          index <
-                          3
-                            ? 900
-                            : 700,
-                        padding:
-                          "5px 8px",
-                      }}
-                    >
-                      {index ===
-                      0
-                        ? "🥇"
-                        : index ===
-                            1
-                          ? "🥈"
-                          : index ===
-                              2
-                            ? "🥉"
-                            : `${index + 1}位`}
-                      {"　"}
-                      {tableNumber}
-                      卓{" "}
-                      {
-                        horse?.horseName
-                      }
-                    </div>
-                  );
-                }
-              )}
+                  }
+                )}
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        )}
     </div>
   );
 }

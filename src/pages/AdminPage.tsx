@@ -1,271 +1,270 @@
 import {
-  useNavigate,
-} from "react-router-dom"
+  useEffect,
+  useState,
+} from "react";
 
 import {
-  useGame,
-} from "../context/GameContext"
+  useNavigate,
+} from "react-router-dom";
 
-import "../styles/derby.css"
+import {
+  subscribePlayers,
+  setRaceStarted,
+  resetGame,
+  type Player,
+} from "../firebase/gameService";
 
-
-
-function AdminPage(){
-
-
-const navigate =
-useNavigate()
-
+import "../styles/derby.css";
 
 
-const {
+function AdminPage() {
 
-players,
-
-startRace,
-
-clearPlayers,
-
-eventInfo,
-
-raceStarted,
-
-}=useGame()
+  const navigate =
+    useNavigate();
 
 
+  const [
+    players,
+    setPlayers,
+  ] = useState<Player[]>([]);
 
 
-
-const resetPlayers = ()=>{
-
-
-const result =
-window.confirm(
-
-"参加者情報を削除しますか？"
-
-)
+  const [
+    resetting,
+    setResetting,
+  ] = useState(false);
 
 
-if(result){
+  useEffect(() => {
 
-clearPlayers()
+    return subscribePlayers(
+      setPlayers
+    );
+
+  }, []);
+
+
+  /*
+   * レース開始
+   */
+
+  async function handleStartRace() {
+
+  const confirmed =
+    window.confirm(
+      "レースを開始しますか？"
+    );
+
+
+  if (!confirmed) {
+    return;
+  }
+
+
+  try {
+
+    /*
+     * レース開始
+     */
+
+    await setRaceStarted(
+      true
+    );
+
+
+    /*
+     * Game画面へ移動
+     */
+
+    navigate("/game");
+
+
+  } catch (error) {
+
+    console.error(error);
+
+    alert(
+      "レース開始に失敗しました。"
+    );
+
+  }
 
 }
 
 
-}
+  /*
+   * ゲームリセット
+   */
 
+  async function handleResetGame() {
 
+    const confirmed =
+      window.confirm(
+        "現在のゲームを完全にリセットします。\n\n参加者・馬・ポイントがすべて削除されます。\n\n本当にリセットしますか？"
+      );
 
 
+    if (!confirmed) {
+      return;
+    }
 
 
-return (
+    try {
 
-<div className="derby-container">
+      setResetting(true);
 
 
-<h1 className="title">
+      await resetGame();
 
-💍 管理画面
 
-</h1>
+      alert(
+        "ゲームをリセットしました。"
+      );
 
 
+    } catch (error) {
 
-<div className="card">
+      console.error(error);
 
+      alert(
+        "リセットに失敗しました。"
+      );
 
-<h2>
 
-{eventInfo.title}
+    } finally {
 
-</h2>
+      setResetting(false);
 
+    }
 
+  }
 
-<p>
 
-新郎：
+  return (
 
-{eventInfo.groom}
+    <div
+      className="derby-container"
+    >
 
-</p>
+      <h1 className="title">
+        💍 管理画面
+      </h1>
 
 
-<p>
+      <div className="card">
 
-新婦：
+        <h2>
+          🏇 出走馬一覧
+        </h2>
 
-{eventInfo.bride}
 
-</p>
+        <p>
+          参加人数：
+          {players.length}
+          名
+        </p>
 
 
+        {
+          players.length === 0 &&
 
-<h3>
+          <p>
+            参加者はいません。
+          </p>
+        }
 
-{
 
-raceStarted
+        {
+          players.map(
+            (player, index) => (
 
-?
+              <div
+                className="horse"
+                key={
+                  `${player.tableNumber}-${index}`
+                }
+              >
 
-"🔴 レース開催中"
+                <h3>
+                  【{player.tableNumber}卓】
+                </h3>
 
-:
 
-"🟢 レース待機中"
+                <p>
+                  👤 {player.playerName}
+                </p>
 
-}
 
-</h3>
+                <p>
+                  🐎 {player.horseName}
+                </p>
 
 
+                <p>
+                  ポイント：
+                  {player.score ?? 0}
+                </p>
 
-</div>
+              </div>
 
+            )
+          )
 
+        }
 
+      </div>
 
 
-<div className="card">
+      <button
+        disabled={
+          players.length === 0
+        }
+        onClick={
+          handleStartRace
+        }
+      >
 
+        🏁 レース開始
 
-<h2>
+      </button>
 
-🏇 出走馬一覧
 
-</h2>
+      <div
+        style={{
+          marginTop: "30px",
+          paddingTop: "20px",
+          borderTop:
+            "1px solid #ddd",
+        }}
+      >
 
+        <button
+          onClick={
+            handleResetGame
+          }
+          disabled={resetting}
+          style={{
+            background:
+              "#777",
+          }}
+        >
 
+          {
+            resetting
+              ? "リセット中..."
+              : "🔄 ゲームリセット"
+          }
 
-{
+        </button>
 
-players.length===0 &&
+      </div>
 
-<p>
 
-参加者はいません
+    </div>
 
-</p>
-
-}
-
-
-
-
-{
-
-players.map(
-
-(player,index)=>(
-
-
-<div
-
-className="horse"
-
-key={index}
-
->
-
-
-<h3>
-
-【{index+1}番】
-
-</h3>
-
-
-<p>
-
-👤 {player.playerName}
-
-</p>
-
-
-<p>
-
-🐎 {player.horseName}
-
-</p>
-
-
-
-</div>
-
-
-)
-
-)
-
-}
-
-
-
-</div>
-
-
-
-
-
-
-
-<button
-
-disabled={
-players.length===0 ||
-raceStarted
-}
-
-onClick={()=>{
-
-
-startRace()
-
-
-navigate("/game")
-
-
-}}
-
->
-
-🏁 レース開始
-
-</button>
-
-
-
-
-
-<br />
-
-
-
-
-
-<button
-
-onClick={resetPlayers}
-
->
-
-🔄 参加者リセット
-
-</button>
-
-
-
-
-</div>
-
-
-)
+  );
 
 }
 
 
-export default AdminPage
+export default AdminPage;

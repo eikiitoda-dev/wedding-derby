@@ -7,6 +7,7 @@ import {
 import HomePage from "./pages/HomePage"
 import GamePage from "./pages/GamePage"
 import AdminPage from "./pages/AdminPage"
+import PlayPage from "./pages/PlayPage"
 
 import {
   GameProvider,
@@ -35,6 +36,11 @@ function App() {
           <Route
             path="/admin"
             element={<AdminPage />}
+          />
+
+          <Route
+            path="/play/:id"
+            element={<PlayPage />}
           />
 
         </Routes>

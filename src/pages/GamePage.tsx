@@ -52,8 +52,8 @@ const JOCKEY_COLORS = [
   "#b66d38",
 ];
 
-const DEPTH_Y = [0.57, 0.705, 0.845];
-const DEPTH_SCALE = [0.94, 1.13, 1.34];
+const DEPTH_Y = [0.57, 0.72, 0.865];
+const DEPTH_SCALE = [0.78, 0.94, 1.08];
 
 function clamp(
   value: number,
@@ -188,6 +188,37 @@ function GamePage() {
     setRanking,
   ] = useState<number[]>([]);
 
+  const [
+    raceProgress,
+    setRaceProgress,
+  ] = useState(0);
+
+  const lastProgressUiUpdateRef =
+    useRef(0);
+
+  /*
+   * scoreはムチのたびに更新されるため、
+   * players配列そのものをバナナタイマーの依存にすると
+   * 毎クリックでタイマーが作り直されてしまう。
+   *
+   * 参加者IDだけを安定したキーにして、
+   * 登録人数が変わった時だけ予定を組み直す。
+   */
+  const playerIdKey =
+    useMemo(
+      () =>
+        players
+          .map(
+            player =>
+              player.id
+          )
+          .filter(Boolean)
+          .sort()
+          .join("|"),
+      [players]
+    );
+
+
   const horses = useMemo(() => {
     const grouped = new Map<
       number,
@@ -301,6 +332,7 @@ function GamePage() {
     if (!raceStarted) {
       setCount(3);
       setRanking([]);
+      setRaceProgress(0);
 
       motionsRef.current = [];
 
@@ -315,6 +347,7 @@ function GamePage() {
 
     setCount(3);
     setRanking([]);
+    setRaceProgress(0);
 
     motionsRef.current =
       horsesRef.current.map(
@@ -362,6 +395,168 @@ function GamePage() {
   }, [
     raceStarted,
     raceId,
+  ]);
+
+
+  // 🍌 参加者ごとの個別バナナ
+  //
+  // 全員一斉ではなく、各参加者に3回ずつ、
+  // それぞれ別のタイミングで発生させる。
+  // タイミングは raceId と参加者IDから決めるため、
+  // GamePageが再描画されても同じレース中に予定が変わらない。
+  useEffect(() => {
+    if (
+      !raceStarted ||
+      count !== 0 ||
+      !raceId ||
+      players.length === 0
+    ) {
+      return;
+    }
+
+    const bananaDuration =
+      5_000;
+
+    const windows = [
+      [15_000, 30_000],
+      [38_000, 55_000],
+      [63_000, 78_000],
+    ] as const;
+
+    const timers:
+      number[] = [];
+
+    const hashText =
+      (text: string) => {
+        let hash = 2166136261;
+
+        for (
+          let index = 0;
+          index < text.length;
+          index += 1
+        ) {
+          hash ^= text.charCodeAt(index);
+          hash = Math.imul(
+            hash,
+            16777619
+          );
+        }
+
+        return hash >>> 0;
+      };
+
+    const playerIds =
+      playerIdKey
+        .split("|")
+        .filter(Boolean);
+
+    playerIds.forEach(
+      playerId => {
+        windows.forEach(
+          (
+            [windowStart, windowEnd],
+            eventIndex
+          ) => {
+            const hash =
+              hashText(
+                `${raceId}:${playerId}:${eventIndex}`
+              );
+
+            const span =
+              windowEnd -
+              windowStart;
+
+            const delay =
+              windowStart +
+              (hash % Math.max(span, 1));
+
+            const eventId =
+              Number(
+                `${String(raceId).slice(-8)}${eventIndex + 1}${hash % 1000}`
+              );
+
+            const startTimer =
+              window.setTimeout(
+                async () => {
+                  try {
+                    await updateDoc(
+                      doc(
+                        db,
+                        "players",
+                        playerId
+                      ),
+                      {
+                        eventType:
+                          "banana",
+                        eventId,
+                        eventExpiresAt:
+                          Date.now() +
+                          bananaDuration,
+                      }
+                    );
+                  } catch (error) {
+                    console.error(
+                      "個別バナナ開始エラー",
+                      error
+                    );
+                  }
+
+                  const endTimer =
+                    window.setTimeout(
+                      async () => {
+                        try {
+                          await updateDoc(
+                            doc(
+                              db,
+                              "players",
+                              playerId
+                            ),
+                            {
+                              eventType:
+                                "none",
+                              eventExpiresAt:
+                                0,
+                            }
+                          );
+                        } catch (error) {
+                          console.error(
+                            "個別バナナ終了エラー",
+                            error
+                          );
+                        }
+                      },
+                      bananaDuration
+                    );
+
+                  timers.push(
+                    endTimer
+                  );
+                },
+                delay
+              );
+
+            timers.push(
+              startTimer
+            );
+          }
+        );
+      }
+    );
+
+    return () => {
+      timers.forEach(
+        timer => {
+          window.clearTimeout(
+            timer
+          );
+        }
+      );
+    };
+  }, [
+    raceStarted,
+    count,
+    raceId,
+    playerIdKey,
   ]);
 
   useEffect(() => {
@@ -486,391 +681,189 @@ function GamePage() {
       ctx.closePath();
     }
 
-    function drawSky(
-      width: number,
-      height: number,
-      camera: number
-    ) {
-      const skyBottom =
-        height * 0.31;
-
-      const gradient =
-        ctx.createLinearGradient(
-          0,
-          0,
-          0,
-          skyBottom
-        );
-
-      gradient.addColorStop(
-        0,
-        "#54b7ec"
-      );
-
-      gradient.addColorStop(
-        1,
-        "#ccecf9"
-      );
-
-      ctx.fillStyle = gradient;
-
-      ctx.fillRect(
-        0,
-        0,
-        width,
-        skyBottom
-      );
-
-      ctx.fillStyle =
-        "rgba(255,255,255,0.82)";
-
-      for (
-        let i = -1;
-        i < 6;
-        i += 1
-      ) {
-        const cycle =
-          width + 500;
-
-        let x =
-          i * 340 -
-          camera * 8;
-
-        x =
-          ((x % cycle) +
-            cycle) %
-            cycle -
-          150;
-
-        const y =
-          60 +
-          (i % 3) * 42;
-
-        ctx.beginPath();
-
-        ctx.arc(
-          x,
-          y,
-          28,
-          0,
-          Math.PI * 2
-        );
-
-        ctx.arc(
-          x + 35,
-          y - 12,
-          39,
-          0,
-          Math.PI * 2
-        );
-
-        ctx.arc(
-          x + 78,
-          y,
-          30,
-          0,
-          Math.PI * 2
-        );
-
-        ctx.fill();
-      }
-    }
-
-    function drawGrandstand(
-      width: number,
-      height: number,
-      camera: number
-    ) {
-      const top =
-        height * 0.17;
-
-      const bottom =
-        height * 0.39;
-
-      ctx.fillStyle =
-        "#e4e8eb";
-
-      ctx.fillRect(
-        0,
-        top,
-        width,
-        bottom - top
-      );
-
-      ctx.fillStyle =
-        "#46545e";
-
-      ctx.fillRect(
-        0,
-        top,
-        width,
-        14
-      );
-
-      for (
-        let row = 0;
-        row < 5;
-        row += 1
-      ) {
-        const y =
-          top +
-          42 +
-          row * 25;
-
-        ctx.fillStyle =
-          row % 2 === 0
-            ? "#78858e"
-            : "#909aa1";
-
-        ctx.fillRect(
-          0,
-          y,
-          width,
-          10
-        );
-      }
-
-      const offset =
-        -(camera * 11) % 38;
-
-      const crowdColors = [
-        "#c84343",
-        "#2864a8",
-        "#e6ae29",
-        "#3c824e",
-        "#754e93",
-        "#e87931",
-      ];
-
-      for (
-        let x = offset - 40;
-        x < width + 40;
-        x += 19
-      ) {
-        for (
-          let row = 0;
-          row < 4;
-          row += 1
-        ) {
-          ctx.fillStyle =
-            crowdColors[
-              (
-                Math.abs(
-                  Math.floor(
-                    x / 19
-                  )
-                ) +
-                row
-              ) %
-                crowdColors.length
-            ];
-
-          ctx.beginPath();
-
-          ctx.arc(
-            x +
-              (row % 2) * 7,
-            top +
-              54 +
-              row * 25,
-            4,
-            0,
-            Math.PI * 2
-          );
-
-          ctx.fill();
-        }
-      }
-    }
-
-    function drawTrack(
-      width: number,
-      height: number,
-      camera: number
-    ) {
-      const top =
-        height * 0.38;
-
-      const grass =
-        ctx.createLinearGradient(
-          0,
-          top,
-          0,
-          height
-        );
-
-      grass.addColorStop(
-        0,
-        "#55a74b"
-      );
-
-      grass.addColorStop(
-        0.55,
-        "#32843d"
-      );
-
-      grass.addColorStop(
-        1,
-        "#176029"
-      );
-
-      ctx.fillStyle = grass;
-
-      ctx.fillRect(
-        0,
-        top,
-        width,
-        height - top
-      );
-
-      const stripeWidth =
-        Math.max(
-          110,
-          width * 0.09
-        );
-
-      const offset =
-        -(
-          camera *
-          width *
-          0.015
-        ) %
-        (stripeWidth * 2);
-
-      ctx.globalAlpha =
-        0.08;
-
-      ctx.fillStyle =
-        "#ffffff";
-
-      for (
-        let x =
-          offset -
-          stripeWidth * 2;
-        x <
-        width +
-          stripeWidth * 2;
-        x +=
-          stripeWidth * 2
-      ) {
-        ctx.fillRect(
-          x,
-          top,
-          stripeWidth,
-          height - top
-        );
-      }
-
-      ctx.globalAlpha = 1;
-
-      const railY =
-        height * 0.445;
-
-      ctx.strokeStyle =
-        "#ffffff";
-
-      ctx.lineWidth = 8;
-
-      ctx.beginPath();
-
-      ctx.moveTo(
-        0,
-        railY
-      );
-
-      ctx.lineTo(
-        width,
-        railY
-      );
-
-      ctx.stroke();
-
-      ctx.strokeStyle =
-        "#dedede";
-
-      ctx.lineWidth = 3;
-
-      const railOffset =
-        -(camera * 19) % 105;
-
-      for (
-        let x =
-          railOffset - 105;
-        x < width + 105;
-        x += 105
-      ) {
-        ctx.beginPath();
-
-        ctx.moveTo(
-          x,
-          railY - 4
-        );
-
-        ctx.lineTo(
-          x - 18,
-          railY + 70
-        );
-
-        ctx.stroke();
-      }
-
-      ctx.globalAlpha =
-        0.12;
-
-      ctx.strokeStyle =
-        "#ffffff";
-
-      ctx.lineWidth = 2;
-
-      for (
-        let i = 0;
-        i < 3;
-        i += 1
-      ) {
-        const y =
-          height *
-          DEPTH_Y[i];
-
-        ctx.beginPath();
-
-        ctx.moveTo(
-          0,
-          y + 37
-        );
-
-        ctx.lineTo(
-          width,
-          y + 37
-        );
-
-        ctx.stroke();
-      }
-
-      ctx.globalAlpha = 1;
-    }
+    const horseImages = Array.from({ length: 11 }, (_, index) => {
+      const image = new Image();
+      image.src = `/horses/horse-${String(index + 1).padStart(2, "0")}.png`;
+      return image;
+    });
+
+    const racecourseImage = new Image();
+    racecourseImage.src = "/racecourse-stand.jpg";
 
     function drawBackground(
       width: number,
       height: number,
-      camera: number
+      cameraProgress: number
     ) {
-      drawSky(
-        width,
-        height,
-        camera
-      );
+      const scenicHeight = height * 0.47;
 
-      drawGrandstand(
-        width,
-        height,
-        camera
-      );
+      if (
+        racecourseImage.complete &&
+        racecourseImage.naturalWidth > 0
+      ) {
+        const sourceW = racecourseImage.naturalWidth;
+        const sourceH = racecourseImage.naturalHeight;
+        const shift = (cameraProgress * 8.5) % Math.max(sourceW * 0.12, 1);
 
-      drawTrack(
-        width,
-        height,
-        camera
+        ctx.drawImage(
+          racecourseImage,
+          Math.min(shift, sourceW - 1),
+          0,
+          Math.max(1, sourceW - Math.min(shift, sourceW - 1)),
+          sourceH,
+          0,
+          0,
+          width,
+          scenicHeight
+        );
+      } else {
+        const sky = ctx.createLinearGradient(0, 0, 0, scenicHeight);
+        sky.addColorStop(0, "#5aaad9");
+        sky.addColorStop(1, "#d9eef7");
+        ctx.fillStyle = sky;
+        ctx.fillRect(0, 0, width, scenicHeight);
+      }
+
+      const blend = ctx.createLinearGradient(
+        0,
+        scenicHeight - 55,
+        0,
+        scenicHeight + 65
       );
+      blend.addColorStop(0, "rgba(74,105,61,0)");
+      blend.addColorStop(1, "rgba(66,103,57,0.96)");
+      ctx.fillStyle = blend;
+      ctx.fillRect(0, scenicHeight - 55, width, 120);
+
+      const grassTop = height * 0.40;
+      const grass = ctx.createLinearGradient(0, grassTop, 0, height);
+      grass.addColorStop(0, "rgba(103,137,82,0.84)");
+      grass.addColorStop(0.22, "#6d8f5d");
+      grass.addColorStop(0.52, "#5b7d50");
+      grass.addColorStop(0.78, "#4b7048");
+      grass.addColorStop(1, "#395f3d");
+      ctx.fillStyle = grass;
+      ctx.fillRect(0, grassTop, width, height - grassTop);
+
+      const broadStripe = Math.max(88, width * 0.055);
+      const broadOffset =
+        -(cameraProgress * width * 0.028) % (broadStripe * 2);
+
+      ctx.globalAlpha = 0.045;
+      for (
+        let x = broadOffset - broadStripe * 2;
+        x < width + broadStripe * 2;
+        x += broadStripe * 2
+      ) {
+        ctx.fillStyle = "#ffffff";
+        ctx.fillRect(x, grassTop, broadStripe, height - grassTop);
+      }
+
+      ctx.globalAlpha = 0.10;
+      const textureOffset = -(cameraProgress * 72) % 160;
+      for (let x = textureOffset - 160; x < width + 160; x += 160) {
+        for (let band = 0; band < 5; band += 1) {
+          const y =
+            grassTop +
+            (height - grassTop) * (0.10 + band * 0.18);
+          const length = 45 + ((band * 19 + Math.abs(Math.floor(x))) % 70);
+          ctx.strokeStyle =
+            band % 2 === 0
+              ? "rgba(255,255,255,0.32)"
+              : "rgba(37,67,39,0.30)";
+          ctx.lineWidth = band < 2 ? 1 : 1.4;
+          ctx.beginPath();
+          ctx.moveTo(x, y);
+          ctx.lineTo(x + length, y);
+          ctx.stroke();
+        }
+      }
+
+      ctx.globalAlpha = 0.18;
+      for (let row = 0; row < 8; row += 1) {
+        const depth = row / 7;
+        const y =
+          grassTop +
+          (height - grassTop) * (0.07 + depth * 0.88);
+        const spacing = 26 - depth * 10;
+        const bladeOffset =
+          -(cameraProgress * (10 + depth * 32)) % spacing;
+
+        for (
+          let x = bladeOffset - spacing;
+          x < width + spacing;
+          x += spacing
+        ) {
+          const jitter =
+            ((Math.floor(x / spacing) + row * 7) % 5) - 2;
+          ctx.strokeStyle =
+            row % 2 === 0
+              ? "rgba(239,247,226,0.32)"
+              : "rgba(43,77,44,0.36)";
+          ctx.lineWidth = depth < 0.45 ? 0.7 : 1;
+          ctx.beginPath();
+          ctx.moveTo(x, y);
+          ctx.lineTo(x + 3 + jitter, y - (2 + depth * 3));
+          ctx.stroke();
+        }
+      }
+
+      ctx.globalAlpha = 0.08;
+      for (let band = 0; band < 3; band += 1) {
+        const y = height * [0.59, 0.73, 0.87][band];
+        const trackOffset =
+          -(cameraProgress * (34 + band * 9)) % 260;
+
+        for (
+          let x = trackOffset - 260;
+          x < width + 260;
+          x += 260
+        ) {
+          ctx.fillStyle = "rgba(44,69,42,0.50)";
+          ctx.beginPath();
+          ctx.ellipse(x, y, 58 + band * 12, 4 + band, -0.03, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+
+      ctx.globalAlpha = 1;
+
+      const railY = height * 0.445;
+      ctx.strokeStyle = "rgba(250,250,250,0.92)";
+      ctx.lineWidth = 4;
+      ctx.beginPath();
+      ctx.moveTo(0, railY);
+      ctx.lineTo(width, railY);
+      ctx.stroke();
+
+      const railOffset = -(cameraProgress * 28) % 96;
+      ctx.strokeStyle = "rgba(225,225,225,0.86)";
+      ctx.lineWidth = 2;
+      for (let x = railOffset - 96; x < width + 96; x += 96) {
+        ctx.beginPath();
+        ctx.moveTo(x, railY);
+        ctx.lineTo(x - 15, railY + 48);
+        ctx.stroke();
+      }
+
+      ctx.globalAlpha = 0.10;
+      const speedOffset = -(cameraProgress * 62) % 230;
+      for (let x = speedOffset - 230; x < width + 230; x += 230) {
+        const band = Math.abs(Math.floor(x / 230)) % 5;
+        const y = height * [0.53, 0.61, 0.70, 0.80, 0.90][band];
+        const length = 85 + band * 24;
+        const gradient = ctx.createLinearGradient(x, y, x + length, y);
+        gradient.addColorStop(0, "rgba(255,255,255,0)");
+        gradient.addColorStop(0.35, "rgba(255,255,255,0.55)");
+        gradient.addColorStop(1, "rgba(255,255,255,0)");
+        ctx.strokeStyle = gradient;
+        ctx.lineWidth = band < 2 ? 1 : 1.8;
+        ctx.beginPath();
+        ctx.moveTo(x, y);
+        ctx.lineTo(x + length, y);
+        ctx.stroke();
+      }
+      ctx.globalAlpha = 1;
     }
 
     function drawFinish(
@@ -878,99 +871,37 @@ function GamePage() {
       width: number,
       height: number
     ) {
-      if (
-        x < -150 ||
-        x > width + 150
-      ) {
+      if (x < -150 || x > width + 150) {
         return;
       }
 
-      const top =
-        height * 0.36;
+      const top = height * 0.36;
+      const bottom = height * 0.97;
 
-      const bottom =
-        height * 0.97;
+      ctx.fillStyle = "rgba(0,0,0,0.22)";
+      ctx.fillRect(x + 10, top, 14, bottom - top);
 
-      ctx.fillStyle =
-        "rgba(0,0,0,0.22)";
-
-      ctx.fillRect(
-        x + 10,
-        top,
-        14,
-        bottom - top
-      );
-
-      ctx.fillStyle =
-        "#ffffff";
-
-      ctx.fillRect(
-        x - 5,
-        top,
-        10,
-        bottom - top
-      );
+      ctx.fillStyle = "#ffffff";
+      ctx.fillRect(x - 5, top, 10, bottom - top);
 
       const block = 15;
 
-      for (
-        let y = top;
-        y < bottom;
-        y += block
-      ) {
-        const index =
-          Math.floor(
-            (y - top) /
-              block
-          );
+      for (let y = top; y < bottom; y += block) {
+        const index = Math.floor((y - top) / block);
 
-        ctx.fillStyle =
-          index % 2 === 0
-            ? "#111111"
-            : "#ffffff";
+        ctx.fillStyle = index % 2 === 0 ? "#111111" : "#ffffff";
+        ctx.fillRect(x - 35, y, 15, block);
 
-        ctx.fillRect(
-          x - 35,
-          y,
-          15,
-          block
-        );
-
-        ctx.fillStyle =
-          index % 2 === 0
-            ? "#ffffff"
-            : "#111111";
-
-        ctx.fillRect(
-          x - 20,
-          y,
-          15,
-          block
-        );
+        ctx.fillStyle = index % 2 === 0 ? "#ffffff" : "#111111";
+        ctx.fillRect(x - 20, y, 15, block);
       }
 
       ctx.save();
-
-      ctx.translate(
-        x - 58,
-        top - 16
-      );
-
-      ctx.fillStyle =
-        "#111111";
-
-      ctx.font =
-        "900 22px sans-serif";
-
-      ctx.textAlign =
-        "center";
-
-      ctx.fillText(
-        "GOAL",
-        18,
-        0
-      );
-
+      ctx.translate(x - 58, top - 16);
+      ctx.fillStyle = "#111111";
+      ctx.font = "900 22px sans-serif";
+      ctx.textAlign = "center";
+      ctx.fillText("GOAL", 18, 0);
       ctx.restore();
     }
 
@@ -981,380 +912,134 @@ function GamePage() {
       y: number,
       scale: number,
       time: number,
-      color: string
+      rank: number
     ) {
+      const image =
+        horseImages[(horse.tableNumber - 1) % horseImages.length];
+
+      /*
+       * 1枚PNGでも「走っている」ように見せるため、
+       * 上下だけではなく前後・傾き・伸縮を
+       * 小さく組み合わせる。
+       *
+       * 各馬はseedで周期をずらし、
+       * 全頭が同じタイミングで跳ねないようにする。
+       */
+      const running =
+        raceStarted &&
+        count === 0 &&
+        !motion.finished;
+
       const phase =
-        time * 0.015 +
-        motion.seed;
+        time * 0.018 +
+        motion.seed * 1.7;
 
-      const strideA =
-        Math.sin(phase);
-
-      const strideB =
-        Math.sin(
-          phase + Math.PI
-        );
+      const gait =
+        running ? 1 : 0;
 
       const bob =
+        Math.sin(phase * 2) *
+        2.0 *
+        gait;
+
+      const surge =
+        (
+          Math.sin(phase) * 2.8 +
+          Math.sin(
+            phase * 0.53 +
+            motion.seed
+          ) * 1.2
+        ) *
+        gait;
+
+      const tilt =
         Math.sin(
-          phase * 2
-        ) * 2.2;
+          phase * 2 +
+          0.7
+        ) *
+        0.012 *
+        gait;
+
+      const stretchX =
+        1 +
+        Math.sin(phase * 2) *
+        0.018 *
+        gait;
+
+      const stretchY =
+        1 -
+        Math.sin(phase * 2) *
+        0.012 *
+        gait;
+
+      const baseWidth = 255;
+      const baseHeight = 166;
 
       ctx.save();
 
       ctx.translate(
-        x,
+        x + surge * scale,
         y + bob * scale
       );
 
+      ctx.rotate(
+        tilt
+      );
+
       ctx.scale(
-        scale,
-        scale
+        scale * stretchX,
+        scale * stretchY
       );
 
-      ctx.globalAlpha =
-        0.24;
-
-      ctx.fillStyle =
-        "#0a2a12";
-
-      ctx.beginPath();
-
-      ctx.ellipse(
-        0,
-        34,
-        64,
-        12,
-        0,
-        0,
-        Math.PI * 2
-      );
-
-      ctx.fill();
-
-      ctx.globalAlpha = 1;
-
-      const body =
-        "#754225";
-
-      const dark =
-        "#432313";
-
-      ctx.strokeStyle =
-        dark;
-
-      ctx.lineWidth = 6;
-
-      ctx.lineCap =
-        "round";
-
-      function leg(
-        startX: number,
-        swing: number,
-        direction: number
+      if (
+        image.complete &&
+        image.naturalWidth > 0
       ) {
-        const kneeX =
-          startX +
-          swing *
-            18 *
-            direction;
-
-        const hoofX =
-          kneeX +
-          swing *
-            23 *
-            direction;
-
-        ctx.beginPath();
-
-        ctx.moveTo(
-          startX,
-          10
+        ctx.drawImage(
+          image,
+          -baseWidth / 2,
+          -baseHeight / 2,
+          baseWidth,
+          baseHeight
         );
-
-        ctx.lineTo(
-          kneeX,
-          31
+      } else {
+        ctx.fillStyle = "#ffffff";
+        ctx.font = "900 18px sans-serif";
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.fillText(
+          `#${horse.tableNumber}`,
+          0,
+          0
         );
-
-        ctx.lineTo(
-          hoofX,
-          56
-        );
-
-        ctx.stroke();
       }
 
-      leg(
-        -29,
-        strideA,
-        1
-      );
+      ctx.restore();
 
-      leg(
-        -13,
-        strideB,
-        -1
-      );
-
-      leg(
-        21,
-        strideB,
-        1
-      );
-
-      leg(
-        34,
-        strideA,
-        -1
-      );
-
-      ctx.fillStyle = body;
-
-      ctx.beginPath();
-
-      ctx.ellipse(
-        0,
-        0,
-        52,
-        25,
-        -0.05,
-        0,
-        Math.PI * 2
-      );
-
-      ctx.fill();
-
-      ctx.fillStyle = dark;
-
-      ctx.beginPath();
-
-      ctx.moveTo(
-        32,
-        -10
-      );
-
-      ctx.lineTo(
-        55,
-        -48
-      );
-
-      ctx.lineTo(
-        68,
-        -42
-      );
-
-      ctx.lineTo(
-        44,
-        6
-      );
-
-      ctx.closePath();
-
-      ctx.fill();
-
-      ctx.fillStyle = body;
-
-      ctx.beginPath();
-
-      ctx.ellipse(
-        69,
-        -47,
-        20,
-        12,
-        -0.08,
-        0,
-        Math.PI * 2
-      );
-
-      ctx.fill();
-
-      ctx.beginPath();
-
-      ctx.moveTo(
-        69,
-        -56
-      );
-
-      ctx.lineTo(
-        76,
-        -72
-      );
-
-      ctx.lineTo(
-        82,
-        -52
-      );
-
-      ctx.fill();
-
-      ctx.strokeStyle = dark;
-      ctx.lineWidth = 7;
-
-      ctx.beginPath();
-
-      ctx.moveTo(
-        -46,
-        -5
-      );
-
-      ctx.quadraticCurveTo(
-        -72,
-        -3 + strideA * 5,
-        -85,
-        -23 + strideA * 8
-      );
-
-      ctx.stroke();
-
-      ctx.fillStyle = color;
-
-      ctx.fillRect(
-        -15,
-        -23,
-        36,
-        25
-      );
-
-      ctx.strokeStyle =
-        "#111111";
-
-      ctx.lineWidth = 2;
-
-      ctx.strokeRect(
-        -15,
-        -23,
-        36,
-        25
-      );
-
-      ctx.fillStyle =
-        color === "#222222"
-          ? "#ffffff"
-          : "#111111";
-
-      ctx.font =
-        "900 15px sans-serif";
-
-      ctx.textAlign =
-        "center";
-
-      ctx.textBaseline =
-        "middle";
-
-      ctx.fillText(
-        String(
+      /*
+       * ラベルは馬の揺れに追従させすぎず、
+       * 大型スクリーンで読みやすさを優先する。
+       */
+      const color =
+        getColor(
           horse.tableNumber
-        ),
-        3,
-        -10
-      );
-
-      ctx.save();
-
-      ctx.translate(
-        8,
-        -30
-      );
-
-      ctx.rotate(-0.23);
-
-      ctx.fillStyle = color;
-
-      ctx.beginPath();
-
-      ctx.moveTo(
-        -4,
-        -11
-      );
-
-      ctx.lineTo(
-        29,
-        -5
-      );
-
-      ctx.lineTo(
-        21,
-        25
-      );
-
-      ctx.lineTo(
-        -10,
-        15
-      );
-
-      ctx.closePath();
-
-      ctx.fill();
-
-      ctx.fillStyle =
-        "#f0bb88";
-
-      ctx.beginPath();
-
-      ctx.arc(
-        20,
-        -20,
-        9,
-        0,
-        Math.PI * 2
-      );
-
-      ctx.fill();
-
-      ctx.fillStyle = color;
-
-      ctx.beginPath();
-
-      ctx.arc(
-        19,
-        -25,
-        10,
-        Math.PI,
-        Math.PI * 2
-      );
-
-      ctx.fill();
-
-      ctx.strokeStyle =
-        "#252525";
-
-      ctx.lineWidth = 3;
-
-      ctx.beginPath();
-
-      ctx.moveTo(
-        7,
-        12
-      );
-
-      ctx.lineTo(
-        47,
-        27
-      );
-
-      ctx.stroke();
-
-      ctx.restore();
-      ctx.restore();
+        );
 
       const labelWidth =
-        clamp(
-          136 * scale,
-          112,
-          178
+        Math.max(
+          158,
+          188 * scale
         );
 
       const labelHeight =
-        clamp(
-          31 * scale,
-          27,
-          39
+        Math.max(
+          28,
+          32 * scale
         );
 
       const labelY =
         y -
-        100 * scale;
+        98 * scale;
 
       roundedRect(
         x - labelWidth / 2,
@@ -1365,36 +1050,320 @@ function GamePage() {
       );
 
       ctx.fillStyle =
-        "rgba(255,255,255,0.95)";
+        rank <= 3
+          ? "rgba(255,248,211,0.98)"
+          : "rgba(255,255,255,0.95)";
 
       ctx.fill();
 
       ctx.strokeStyle =
-        color;
+        rank === 1
+          ? "#d6a900"
+          : rank === 2
+            ? "#a9adb2"
+            : rank === 3
+              ? "#b56b36"
+              : color;
 
-      ctx.lineWidth = 4;
+      ctx.lineWidth =
+        rank <= 3
+          ? 5
+          : 3;
+
       ctx.stroke();
 
-      let name =
+      const rankText =
+        rank === 1
+          ? "1位"
+          : rank === 2
+            ? "2位"
+            : rank === 3
+              ? "3位"
+              : `${rank}位`;
+
+      const fontSize =
+        Math.max(
+          12,
+          13 * scale
+        );
+
+      ctx.fillStyle =
+        "#151515";
+
+      ctx.font =
+        `900 ${fontSize}px sans-serif`;
+
+      ctx.textAlign =
+        "center";
+
+      ctx.textBaseline =
+        "middle";
+
+      const prefix =
+        `${rankText}  ${horse.tableNumber} `;
+
+      const originalName =
         horse.horseName ||
         `${horse.tableNumber}卓`;
 
-      if (name.length > 9) {
-        name =
-          `${name.slice(
+      const maxTextWidth =
+        labelWidth - 18;
+
+      let fittedName =
+        originalName;
+
+      while (
+        fittedName.length > 1 &&
+        ctx.measureText(
+          `${prefix}${fittedName}`
+        ).width >
+          maxTextWidth
+      ) {
+        fittedName =
+          fittedName.slice(
             0,
-            8
+            -1
+          );
+      }
+
+      if (
+        fittedName !==
+        originalName
+      ) {
+        fittedName =
+          `${fittedName.slice(
+            0,
+            Math.max(
+              fittedName.length - 1,
+              1
+            )
           )}…`;
       }
 
+      ctx.save();
+
+      ctx.beginPath();
+
+      ctx.rect(
+        x -
+          labelWidth / 2 +
+          6,
+        labelY + 2,
+        labelWidth - 12,
+        labelHeight - 4
+      );
+
+      ctx.clip();
+
+      ctx.fillText(
+        `${prefix}${fittedName}`,
+        x,
+        labelY +
+          labelHeight / 2
+      );
+
+      ctx.restore();
+    }
+
+    function drawRaceProgress(
+      width: number,
+      height: number,
+      leaderProgress: number
+    ) {
+      /*
+       * 大スクリーンでは距離標識より、
+       * 「あとどれくらい」が一目で分かる横ゲージを優先。
+       *
+       * 右上の順位表と干渉しないよう画面下中央に配置する。
+       */
+      const progress =
+        clamp(
+          leaderProgress,
+          0,
+          100
+        );
+
+      const barWidth =
+        Math.min(
+          width * 0.62,
+          920
+        );
+
+      const barHeight =
+        Math.max(
+          22,
+          Math.min(
+            30,
+            height * 0.032
+          )
+        );
+
+      const x =
+        (width - barWidth) / 2;
+
+      const y =
+        height -
+        barHeight -
+        34;
+
+      const labelY =
+        y - 18;
+
+      ctx.save();
+
+      ctx.textBaseline =
+        "middle";
+
+      ctx.shadowColor =
+        "rgba(0,0,0,0.78)";
+
+      ctx.shadowBlur = 7;
+
       ctx.fillStyle =
-        "#141414";
+        "#ffffff";
 
       ctx.font =
-        `900 ${clamp(
-          14 * scale,
+        `900 ${Math.max(
+          15,
+          Math.min(
+            21,
+            width * 0.014
+          )
+        )}px sans-serif`;
+
+      ctx.textAlign =
+        "left";
+
+      ctx.fillText(
+        "START",
+        x,
+        labelY
+      );
+
+      ctx.textAlign =
+        "right";
+
+      ctx.fillText(
+        "🏁 GOAL",
+        x + barWidth,
+        labelY
+      );
+
+      ctx.shadowBlur = 0;
+
+      roundedRect(
+        x - 5,
+        y - 5,
+        barWidth + 10,
+        barHeight + 10,
+        (barHeight + 10) / 2
+      );
+
+      ctx.fillStyle =
+        "rgba(5,14,10,0.82)";
+
+      ctx.fill();
+
+      roundedRect(
+        x,
+        y,
+        barWidth,
+        barHeight,
+        barHeight / 2
+      );
+
+      ctx.fillStyle =
+        "rgba(255,255,255,0.20)";
+
+      ctx.fill();
+
+      const fillWidth =
+        barWidth *
+        (progress / 100);
+
+      if (
+        fillWidth > 1
+      ) {
+        const gradient =
+          ctx.createLinearGradient(
+            x,
+            y,
+            x + barWidth,
+            y
+          );
+
+        gradient.addColorStop(
+          0,
+          "#e4bd42"
+        );
+
+        gradient.addColorStop(
+          0.72,
+          "#f0d76b"
+        );
+
+        gradient.addColorStop(
+          1,
+          "#fff0a2"
+        );
+
+        roundedRect(
+          x,
+          y,
+          Math.max(
+            fillWidth,
+            barHeight
+          ),
+          barHeight,
+          barHeight / 2
+        );
+
+        ctx.fillStyle =
+          gradient;
+
+        ctx.fill();
+      }
+
+      /*
+       * 先頭馬の現在地を大きなマーカーで表示。
+       */
+      const markerX =
+        x +
+        barWidth *
+          (progress / 100);
+
+      ctx.beginPath();
+
+      ctx.arc(
+        markerX,
+        y + barHeight / 2,
+        Math.max(
           12,
-          18
+          barHeight * 0.62
+        ),
+        0,
+        Math.PI * 2
+      );
+
+      ctx.fillStyle =
+        "#ffffff";
+
+      ctx.fill();
+
+      ctx.strokeStyle =
+        "#9d7715";
+
+      ctx.lineWidth = 3;
+
+      ctx.stroke();
+
+      ctx.fillStyle =
+        "#171717";
+
+      ctx.font =
+        `900 ${Math.max(
+          11,
+          barHeight * 0.42
         )}px sans-serif`;
 
       ctx.textAlign =
@@ -1404,169 +1373,229 @@ function GamePage() {
         "middle";
 
       ctx.fillText(
-        `${horse.tableNumber} ${name}`,
-        x,
-        labelY +
-          labelHeight / 2
+        "🐎",
+        markerX,
+        y + barHeight / 2 + 1
       );
+
+      /*
+       * 残り距離は「1600mレース換算」の目安表示。
+       * 厳密な競馬距離ではなく、観客が残り感を掴むためのUI。
+       */
+      const remainingMeters =
+        Math.max(
+          0,
+          Math.round(
+            (1600 *
+              (1 - progress / 100)) /
+              50
+          ) * 50
+        );
+
+      const statusText =
+        progress >= 100
+          ? "GOAL!"
+          : progress >= 87.5
+            ? "LAST SPURT!"
+            : `残り 約${remainingMeters}m`;
+
+      ctx.shadowColor =
+        "rgba(0,0,0,0.82)";
+
+      ctx.shadowBlur = 6;
+
+      ctx.fillStyle =
+        "#ffffff";
+
+      ctx.font =
+        `900 ${Math.max(
+          17,
+          Math.min(
+            25,
+            width * 0.016
+          )
+        )}px sans-serif`;
+
+      ctx.textAlign =
+        "center";
+
+      ctx.fillText(
+        statusText,
+        width / 2,
+        y +
+          barHeight +
+          27
+      );
+
+      ctx.restore();
     }
+
 
     function drawRankingPanel(
       width: number,
+      height: number,
       motions: RaceMotion[],
       horseData: HorseData[]
     ) {
-      if (
-        motions.length === 0
-      ) {
+      if (motions.length === 0) {
         return;
       }
 
-      const sorted =
-        [...motions].sort(
-          (a, b) =>
-            b.progress -
-            a.progress
-        );
+      const sorted = [...motions].sort(
+        (a, b) => b.progress - a.progress
+      );
 
-      const shown =
-        sorted.slice(0, 5);
-
-      const panelWidth =
-        clamp(
-          width * 0.18,
-          190,
-          270
-        );
-
-      const panelX =
-        width -
-        panelWidth -
-        20;
-
-      const panelY = 20;
-
-      const panelHeight =
-        52 +
-        shown.length * 36;
+      const panelWidth = Math.min(245, width * 0.18);
+      const panelX = width - panelWidth - 18;
+      const panelY = 18;
+      const rowHeight = Math.max(24, Math.min(29, height * 0.032));
+      const headerHeight = 46;
+      const shown = sorted.slice(0, Math.min(11, sorted.length));
+      const panelHeight = headerHeight + rowHeight * shown.length + 14;
 
       roundedRect(
         panelX,
         panelY,
         panelWidth,
         panelHeight,
-        12
+        14
       );
 
-      ctx.fillStyle =
-        "rgba(5,14,11,0.82)";
-
+      ctx.fillStyle = "rgba(7,18,13,0.88)";
       ctx.fill();
+      ctx.strokeStyle = "rgba(255,255,255,0.16)";
+      ctx.lineWidth = 1;
+      ctx.stroke();
 
-      ctx.fillStyle =
-        "#ffffff";
+      ctx.fillStyle = "#ffffff";
+      ctx.font = "900 17px sans-serif";
+      ctx.textAlign = "left";
+      ctx.textBaseline = "middle";
+      ctx.fillText("CURRENT ORDER", panelX + 15, panelY + 22);
 
-      ctx.font =
-        "900 17px sans-serif";
+      shown.forEach((motion, index) => {
+        const horse = horseData.find(
+          (item) => item.tableNumber === motion.tableNumber
+        );
+        if (!horse) return;
 
-      ctx.textAlign =
-        "left";
+        const y =
+          panelY +
+          headerHeight +
+          index * rowHeight +
+          rowHeight / 2;
+        const color = getColor(horse.tableNumber);
 
-      ctx.textBaseline =
-        "middle";
-
-      ctx.fillText(
-        "CURRENT ORDER",
-        panelX + 15,
-        panelY + 22
-      );
-
-      shown.forEach(
-        (motion, index) => {
-          const horse =
-            horseData.find(
-              (item) =>
-                item.tableNumber ===
-                motion.tableNumber
-            );
-
-          if (!horse) {
-            return;
-          }
-
-          const y =
-            panelY +
-            55 +
-            index * 36;
-
-          const color =
-            getColor(
-              horse.tableNumber
-            );
-
-          ctx.fillStyle = color;
-
-          ctx.beginPath();
-
-          ctx.arc(
-            panelX + 20,
-            y,
-            11,
-            0,
-            Math.PI * 2
+        if (index < 3) {
+          roundedRect(
+            panelX + 8,
+            y - rowHeight / 2 + 2,
+            panelWidth - 16,
+            rowHeight - 4,
+            6
           );
-
+          ctx.fillStyle =
+            index === 0
+              ? "rgba(214,169,0,0.18)"
+              : index === 1
+                ? "rgba(169,173,178,0.15)"
+                : "rgba(181,107,54,0.15)";
           ctx.fill();
-
-          ctx.fillStyle =
-            color === "#222222"
-              ? "#ffffff"
-              : "#111111";
-
-          ctx.font =
-            "900 11px sans-serif";
-
-          ctx.textAlign =
-            "center";
-
-          ctx.fillText(
-            String(
-              horse.tableNumber
-            ),
-            panelX + 20,
-            y
-          );
-
-          let horseName =
-            horse.horseName;
-
-          if (
-            horseName.length >
-            10
-          ) {
-            horseName =
-              `${horseName.slice(
-                0,
-                9
-              )}…`;
-          }
-
-          ctx.fillStyle =
-            "#ffffff";
-
-          ctx.font =
-            "800 14px sans-serif";
-
-          ctx.textAlign =
-            "left";
-
-          ctx.fillText(
-            `${index + 1}. ${horseName}`,
-            panelX + 42,
-            y
-          );
         }
-      );
+
+        ctx.fillStyle =
+          index === 0
+            ? "#f6cc34"
+            : index === 1
+              ? "#d8dde2"
+              : index === 2
+                ? "#d68b50"
+                : "#ffffff";
+        ctx.font = "900 13px sans-serif";
+        ctx.textAlign = "right";
+        ctx.fillText(String(index + 1), panelX + 29, y);
+
+        ctx.fillStyle = color;
+        roundedRect(panelX + 38, y - 10, 24, 20, 5);
+        ctx.fill();
+
+        ctx.fillStyle = color === "#222222" ? "#ffffff" : "#111111";
+        ctx.font = "900 10px sans-serif";
+        ctx.textAlign = "center";
+        ctx.fillText(String(horse.tableNumber), panelX + 50, y);
+
+        const originalHorseName =
+          horse.horseName ||
+          `${horse.tableNumber}卓`;
+
+        ctx.fillStyle =
+          "#ffffff";
+
+        ctx.font =
+          "800 13px sans-serif";
+
+        ctx.textAlign =
+          "left";
+
+        const maxNameWidth =
+          Math.max(
+            50,
+            panelWidth - 84
+          );
+
+        let horseName =
+          originalHorseName;
+
+        while (
+          horseName.length > 1 &&
+          ctx.measureText(
+            horseName
+          ).width >
+            maxNameWidth
+        ) {
+          horseName =
+            horseName.slice(
+              0,
+              -1
+            );
+        }
+
+        if (
+          horseName !==
+          originalHorseName
+        ) {
+          horseName =
+            `${horseName.slice(
+              0,
+              Math.max(
+                horseName.length - 1,
+                1
+              )
+            )}…`;
+        }
+
+        ctx.save();
+
+        ctx.beginPath();
+
+        ctx.rect(
+          panelX + 68,
+          y -
+            rowHeight / 2,
+          panelWidth - 76,
+          rowHeight
+        );
+
+        ctx.clip();
+
+        ctx.fillText(
+          horseName,
+          panelX + 70,
+          y
+        );
+
+        ctx.restore();
+      });
     }
 
     function updateRace(
@@ -1590,27 +1619,51 @@ function GamePage() {
       elapsedRef.current +=
         deltaSeconds;
 
+      const scoreValues =
+        horseData.map(
+          horse =>
+            horse.averageScore
+        );
+
+      const maxScore =
+        Math.max(
+          ...scoreValues
+        );
+
+      const minScore =
+        Math.min(
+          ...scoreValues
+        );
+
       const fieldAverage =
-        horseData.reduce(
-          (sum, horse) =>
-            sum +
-            horse.averageScore,
+        scoreValues.reduce(
+          (sum, value) =>
+            sum + value,
           0
         ) /
-        horseData.length;
+        scoreValues.length;
+
+      const scoreRange =
+        Math.max(
+          maxScore - minScore,
+          1
+        );
 
       const newlyFinished:
         number[] = [];
 
       motions.forEach(
-        (motion) => {
-          if (motion.finished) {
+        motion => {
+
+          if (
+            motion.finished
+          ) {
             return;
           }
 
           const horse =
             horseData.find(
-              (item) =>
+              item =>
                 item.tableNumber ===
                 motion.tableNumber
             );
@@ -1619,61 +1672,93 @@ function GamePage() {
             return;
           }
 
-          const scoreDifference =
-            horse.averageScore -
-            fieldAverage;
+          /*
+           * ポイントは速度へ自然に反映。
+           *
+           * 順位そのものへ強制的に寄せないので、
+           * ゴール前にワープしたような逆転は起こさない。
+           */
+          const centeredScore =
+            (
+              horse.averageScore -
+              fieldAverage
+            ) /
+            scoreRange;
 
-          let scoreEffect =
-            Math.tanh(
-              scoreDifference / 18
-            ) * 0.065;
+          const scoreEffect =
+            clamp(
+              centeredScore *
+                0.13,
+              -0.075,
+              0.075
+            );
 
-          const raceRatio =
-            motion.progress / 100;
-
-          if (raceRatio > 0.82) {
-            scoreEffect *= 1.3;
-          }
-
-          const wave =
+          /*
+           * 馬ごとの調子の波。
+           * ポイントが同じでも完全な横並びにならず、
+           * 追い抜き・差し返しが自然に起きる。
+           */
+          const naturalWave =
             Math.sin(
               elapsedRef.current *
-                0.58 +
+                0.57 +
                 motion.seed
             ) *
-              0.021 +
+              0.018 +
             Math.sin(
               elapsedRef.current *
-                1.21 +
-                motion.seed * 1.8
+                1.19 +
+                motion.seed *
+                  1.83
             ) *
-              0.011;
+              0.010;
 
-          const target =
+          /*
+           * 全体を約90秒へ寄せる補正。
+           * これは順位補正ではなく、
+           * レース時間だけを安定させるためのもの。
+           */
+          const targetProgress =
             Math.min(
               99,
-              (elapsedRef.current /
-                90) *
+              (
+                elapsedRef.current /
+                90
+              ) *
                 100
             );
 
-          const correction =
+          const paceCorrection =
             clamp(
-              (target -
-                motion.progress) *
-                0.006,
-              -0.05,
-              0.07
+              (
+                targetProgress -
+                motion.progress
+              ) *
+                0.0052,
+              -0.045,
+              0.060
             );
+
+          /*
+           * 終盤でもポイント効果は残すが、
+           * 強制的な順位入れ替えはしない。
+           * 最新ポイントの逆転は、
+           * あくまで速度差として画面へ現れる。
+           */
+          const lateRaceFactor =
+            motion.progress > 72
+              ? 1.12
+              : 1;
 
           const multiplier =
             clamp(
               1 +
-                scoreEffect +
-                wave +
-                correction,
-              0.86,
-              1.15
+                scoreEffect *
+                  lateRaceFactor +
+                naturalWave +
+                paceCorrection,
+              0.82,
+              1.18
             );
 
           motion.progress +=
@@ -1681,33 +1766,105 @@ function GamePage() {
             multiplier *
             deltaSeconds;
 
+          /*
+           * 90秒を大幅に超えないための最低限の補助。
+           * 全頭同じ補正なので順位は操作しない。
+           */
           if (
             elapsedRef.current >
-              84 &&
-            motion.progress < 93
+              87 &&
+            motion.progress <
+              94
           ) {
             motion.progress +=
               BASE_SPEED *
-              0.07 *
+              0.09 *
               deltaSeconds;
           }
 
           if (
             motion.progress >=
-            100
+              100
           ) {
-            motion.progress = 100;
-            motion.finished = true;
+
+            motion.progress =
+              100;
+
+            motion.finished =
+              true;
 
             newlyFinished.push(
               motion.tableNumber
             );
           }
+
+        }
+      );
+
+      /*
+       * 同一フレームで複数頭がゴールした場合だけ、
+       * 画面上の進行度を優先。
+       * 完全同着ならポイントが高い方を上位にする。
+       */
+      newlyFinished.sort(
+        (a, b) => {
+
+          const motionA =
+            motions.find(
+              item =>
+                item.tableNumber === a
+            );
+
+          const motionB =
+            motions.find(
+              item =>
+                item.tableNumber === b
+            );
+
+          const progressA =
+            motionA?.progress ?? 0;
+
+          const progressB =
+            motionB?.progress ?? 0;
+
+          if (
+            progressB !==
+            progressA
+          ) {
+            return (
+              progressB -
+              progressA
+            );
+          }
+
+          const horseA =
+            horseData.find(
+              item =>
+                item.tableNumber === a
+            );
+
+          const horseB =
+            horseData.find(
+              item =>
+                item.tableNumber === b
+            );
+
+          return (
+            (
+              horseB?.averageScore ??
+              0
+            ) -
+            (
+              horseA?.averageScore ??
+              0
+            )
+          );
         }
       );
 
       newlyFinished.forEach(
-        (tableNumber) => {
+        tableNumber => {
+
           if (
             finishedSentRef.current.has(
               tableNumber
@@ -1721,7 +1878,7 @@ function GamePage() {
           );
 
           setRanking(
-            (previous) =>
+            previous =>
               previous.includes(
                 tableNumber
               )
@@ -1735,6 +1892,7 @@ function GamePage() {
           void finishTable(
             tableNumber
           );
+
         }
       );
     }
@@ -1793,14 +1951,33 @@ function GamePage() {
             )
           : 0;
 
-      const camera =
-        leader < 34
-          ? 0
-          : clamp(
-              leader - 34,
-              0,
-              62
-            );
+      if (
+        now -
+          lastProgressUiUpdateRef.current >=
+        180
+      ) {
+        lastProgressUiUpdateRef.current =
+          now;
+
+        setRaceProgress(
+          clamp(
+            leader,
+            0,
+            100
+          )
+        );
+      }
+
+      // レース序盤は馬そのものが左から右へ進む。
+      // 先頭がある程度進んでからカメラが追従する。
+      // これにより「その場でバウンドしているだけ」に見えるのを防ぐ。
+      const leftMargin = width * 0.10;
+      const pixelsPerProgress = width / 52;
+      const cameraFollowStart = 27;
+      const camera = Math.max(
+        0,
+        leader - cameraFollowStart
+      );
 
       drawBackground(
         width,
@@ -1808,16 +1985,10 @@ function GamePage() {
         camera
       );
 
-      const worldScale =
-        width / 74;
-
-      const leftMargin =
-        width * 0.085;
-
       const finishX =
         leftMargin +
         (100 - camera) *
-          worldScale;
+          pixelsPerProgress;
 
       drawFinish(
         finishX,
@@ -1825,129 +1996,74 @@ function GamePage() {
         height
       );
 
-      const horseData =
-        horsesRef.current;
+      const horseData = horsesRef.current;
+      const rankMap = new Map<number, number>();
 
-      const drawable =
-        motions
-          .map(
-            (
-              motion,
-              index
-            ) => {
-              const horse =
-                horseData.find(
-                  (item) =>
-                    item.tableNumber ===
-                    motion.tableNumber
-                );
+      [...motions]
+        .sort((a, b) => b.progress - a.progress)
+        .forEach((motion, index) => {
+          rankMap.set(motion.tableNumber, index + 1);
+        });
 
-              if (!horse) {
-                return null;
-              }
-
-              const depth =
-                index % 3;
-
-              const groupIndex =
-                Math.floor(
-                  index / 3
-                );
-
-              const groupShift =
-                [
-                  0,
-                  -12,
-                  12,
-                  -6,
-                ][
-                  groupIndex % 4
-                ];
-
-              const y =
-                height *
-                  DEPTH_Y[
-                    depth
-                  ] +
-                groupShift;
-
-              const visualOffset =
-                [
-                  0,
-                  -9,
-                  9,
-                  -4,
-                ][
-                  groupIndex % 4
-                ];
-
-              const x =
-                leftMargin +
-                (
-                  motion.progress -
-                  camera
-                ) *
-                  worldScale +
-                visualOffset;
-
-              return {
-                horse,
-                motion,
-                depth,
-                x,
-                y,
-                scale:
-                  DEPTH_SCALE[
-                    depth
-                  ],
-              };
-            }
-          )
-          .filter(
-            (
-              value
-            ): value is NonNullable<
-              typeof value
-            > =>
-              value !== null
-          )
-          .sort(
-            (a, b) => {
-              if (
-                a.depth !==
-                b.depth
-              ) {
-                return (
-                  a.depth -
-                  b.depth
-                );
-              }
-
-              return (
-                a.x - b.x
-              );
-            }
+      const drawable = motions
+        .map((motion, index) => {
+          const horse = horseData.find(
+            (item) => item.tableNumber === motion.tableNumber
           );
 
-      drawable.forEach(
-        (item) => {
-          drawHorse(
-            item.horse,
-            item.motion,
-            item.x,
-            item.y,
-            item.scale,
-            now,
-            getColor(
-              item.horse
-                .tableNumber
-            )
-          );
-        }
-      );
+          if (!horse) {
+            return null;
+          }
+
+          const depth = index % 3;
+          const groupIndex = Math.floor(index / 3);
+
+          const x =
+            leftMargin +
+            (motion.progress - camera) *
+              pixelsPerProgress;
+
+          const offsetPattern = [0, -11, 11, -6];
+          const y =
+            height * DEPTH_Y[depth] +
+            offsetPattern[groupIndex % offsetPattern.length];
+
+          return {
+            horse,
+            motion,
+            depth,
+            x,
+            y,
+            scale: DEPTH_SCALE[depth],
+            rank: rankMap.get(horse.tableNumber) ?? horseData.length,
+          };
+        })
+        .filter(
+          (value): value is NonNullable<typeof value> =>
+            value !== null
+        )
+        .sort((a, b) => {
+          if (a.depth !== b.depth) {
+            return a.depth - b.depth;
+          }
+          return a.x - b.x;
+        });
+
+      drawable.forEach((item) => {
+        drawHorse(
+          item.horse,
+          item.motion,
+          item.x,
+          item.y,
+          item.scale,
+          now,
+          item.rank
+        );
+      });
 
       drawRankingPanel(
         width,
+        height,
         motions,
         horseData
       );
@@ -2009,6 +2125,19 @@ function GamePage() {
     ranking.length ===
       horses.length;
 
+  const remainingMeters =
+    Math.max(
+      0,
+      Math.round(
+        (
+          1600 *
+          (1 - raceProgress / 100)
+        ) /
+          50
+      ) *
+        50
+    );
+
   return (
     <div
       style={{
@@ -2031,6 +2160,262 @@ function GamePage() {
           display: "block",
         }}
       />
+
+
+      {raceStarted &&
+        count === 0 &&
+        !raceFinished && (
+          <div
+            style={{
+              position:
+                "absolute",
+              left:
+                "50%",
+              bottom:
+                "72px",
+              transform:
+                "translateX(-50%)",
+              width:
+                "min(68vw, 980px)",
+              zIndex: 25,
+              pointerEvents:
+                "none",
+              color:
+                "#ffffff",
+              textShadow:
+                "0 3px 9px rgba(0,0,0,0.9)",
+            }}
+          >
+            <div
+              style={{
+                display:
+                  "flex",
+                justifyContent:
+                  "space-between",
+                alignItems:
+                  "center",
+                marginBottom:
+                  "8px",
+                fontSize:
+                  "clamp(15px, 1.4vw, 22px)",
+                fontWeight:
+                  900,
+              }}
+            >
+              <span>
+                START
+              </span>
+
+              <span
+                style={{
+                  fontSize:
+                    "clamp(18px, 1.8vw, 27px)",
+                }}
+              >
+                {raceProgress >= 87.5
+                  ? "🔥 LAST SPURT!"
+                  : `残り 約${remainingMeters}m`}
+              </span>
+
+              <span>
+                🏁 GOAL
+              </span>
+            </div>
+
+            <div
+              style={{
+                position:
+                  "relative",
+                height:
+                  "30px",
+                border:
+                  "4px solid rgba(255,255,255,0.96)",
+                borderRadius:
+                  "999px",
+                background:
+                  "rgba(5,14,10,0.82)",
+                boxShadow:
+                  "0 5px 18px rgba(0,0,0,0.5)",
+                overflow:
+                  "visible",
+              }}
+            >
+              <div
+                style={{
+                  width:
+                    `${raceProgress}%`,
+                  height:
+                    "100%",
+                  borderRadius:
+                    "999px",
+                  background:
+                    "linear-gradient(90deg, #d5aa2f, #f1d561, #fff1a2)",
+                  transition:
+                    "width 180ms linear",
+                }}
+              />
+
+              <div
+                style={{
+                  position:
+                    "absolute",
+                  left:
+                    `${raceProgress}%`,
+                  top:
+                    "50%",
+                  transform:
+                    "translate(-50%, -50%)",
+                  width:
+                    "42px",
+                  height:
+                    "42px",
+                  display:
+                    "flex",
+                  alignItems:
+                    "center",
+                  justifyContent:
+                    "center",
+                  borderRadius:
+                    "50%",
+                  border:
+                    "3px solid #9b7616",
+                  background:
+                    "#ffffff",
+                  boxShadow:
+                    "0 4px 12px rgba(0,0,0,0.35)",
+                  fontSize:
+                    "24px",
+                  transition:
+                    "left 180ms linear",
+                }}
+              >
+                🐎
+              </div>
+            </div>
+
+            <div
+              style={{
+                position:
+                  "relative",
+                height:
+                  "34px",
+                marginTop:
+                  "6px",
+                color:
+                  "rgba(255,255,255,0.94)",
+                fontSize:
+                  "clamp(11px, 1vw, 15px)",
+                fontWeight:
+                  800,
+              }}
+            >
+              {[
+                ["1600m", 0],
+                ["1200m", 25],
+                ["800m", 50],
+                ["400m", 75],
+                ["200m", 87.5],
+              ].map(
+                ([
+                  label,
+                  percent,
+                ]) => (
+                  <div
+                    key={
+                      label
+                    }
+                    style={{
+                      position:
+                        "absolute",
+                      left:
+                        `${percent}%`,
+                      transform:
+                        percent === 0
+                          ? "translateX(0)"
+                          : "translateX(-50%)",
+                      top: 0,
+                      textAlign:
+                        "center",
+                      textShadow:
+                        "0 2px 6px rgba(0,0,0,0.9)",
+                    }}
+                  >
+                    <div
+                      style={{
+                        width:
+                          "1px",
+                        height:
+                          "9px",
+                        margin:
+                          "0 auto 2px",
+                        background:
+                          "rgba(255,255,255,0.75)",
+                      }}
+                    />
+                    {label}
+                  </div>
+                )
+              )}
+            </div>
+          </div>
+        )}
+
+      {raceStarted &&
+        count === 0 &&
+        !raceFinished && (
+          <div
+            style={{
+              position:
+                "absolute",
+              top:
+                "18px",
+              left:
+                "18px",
+              zIndex:
+                18,
+              padding:
+                "12px 18px",
+              borderRadius:
+                "16px",
+              border:
+                "1px solid rgba(255,255,255,0.28)",
+              background:
+                "rgba(5,14,10,0.82)",
+              boxShadow:
+                "0 6px 18px rgba(0,0,0,0.35)",
+              color:
+                "#ffffff",
+              pointerEvents:
+                "none",
+            }}
+          >
+            <div
+              style={{
+                fontSize:
+                  "clamp(15px, 1.4vw, 21px)",
+                fontWeight:
+                  900,
+              }}
+            >
+              📣 レース中
+            </div>
+
+            <div
+              style={{
+                marginTop:
+                  "3px",
+                fontSize:
+                  "clamp(11px, 1vw, 15px)",
+                fontWeight:
+                  700,
+                opacity:
+                  0.94,
+              }}
+            >
+              みんなでムチを送って応援！
+            </div>
+          </div>
+        )}
 
       <div
         style={{
@@ -2057,17 +2442,26 @@ function GamePage() {
           💍 {eventInfo.title}
         </div>
 
-        <div
-          style={{
-            fontSize:
-              "clamp(12px, 1.3vw, 20px)",
-            fontWeight: 800,
-          }}
-        >
-          {eventInfo.groom}
-          {" × "}
-          {eventInfo.bride}
-        </div>
+        {(eventInfo.groom ||
+          eventInfo.bride) && (
+          <div
+            style={{
+              marginTop:
+                "2px",
+              fontSize:
+                "clamp(12px, 1.3vw, 20px)",
+              fontWeight:
+                800,
+            }}
+          >
+            {eventInfo.groom}
+            {eventInfo.groom &&
+              eventInfo.bride
+              ? " × "
+              : ""}
+            {eventInfo.bride}
+          </div>
+        )}
       </div>
 
       {!raceStarted && (
@@ -2202,7 +2596,7 @@ function GamePage() {
                 "none",
             }}
           >
-            WEDDING DERBY
+            📣 スマホからムチで応援！
           </div>
         )}
 
@@ -2249,8 +2643,10 @@ function GamePage() {
               <div
                 style={{
                   fontSize:
-                    "76px",
+                    "58px",
                   lineHeight: 1,
+                  marginBottom:
+                    "8px",
                 }}
               >
                 🏆
@@ -2258,11 +2654,16 @@ function GamePage() {
 
               <div
                 style={{
-                  marginTop:
-                    "8px",
                   fontSize:
-                    "clamp(23px, 3vw, 40px)",
-                  fontWeight: 900,
+                    "clamp(18px, 2vw, 30px)",
+                  lineHeight:
+                    1.1,
+                  fontWeight:
+                    900,
+                  letterSpacing:
+                    "0.14em",
+                  color:
+                    "#7a5a00",
                 }}
               >
                 WINNER
@@ -2271,26 +2672,70 @@ function GamePage() {
               <div
                 style={{
                   margin:
-                    "8px 0 22px",
-                  fontSize:
-                    "clamp(36px, 5vw, 66px)",
-                  fontWeight: 900,
+                    "14px auto 20px",
+                  padding:
+                    "14px 24px",
+                  maxWidth:
+                    "760px",
+                  borderRadius:
+                    "18px",
+                  border:
+                    "2px solid rgba(188,145,31,0.35)",
+                  background:
+                    "rgba(255,255,255,0.82)",
+                  boxShadow:
+                    "0 7px 20px rgba(110,80,10,0.10)",
                 }}
               >
-                {winner.tableNumber}
-                卓{" "}
-                {winner.horseName}
+                <div
+                  style={{
+                    fontSize:
+                      "clamp(34px, 4.5vw, 58px)",
+                    lineHeight:
+                      1.12,
+                    fontWeight:
+                      900,
+                    wordBreak:
+                      "break-word",
+                  }}
+                >
+                  {winner.tableNumber}
+                  卓{" "}
+                  {winner.horseName}
+                </div>
               </div>
 
               <div
                 style={{
-                  display: "grid",
+                  margin:
+                    "0 auto 16px",
+                  fontSize:
+                    "clamp(14px, 1.4vw, 19px)",
+                  fontWeight:
+                    800,
+                  color:
+                    "#6f6450",
+                }}
+              >
+                FINAL RESULT
+              </div>
+
+              <div
+                style={{
+                  display:
+                    "grid",
                   gridTemplateColumns:
-                    "repeat(2, minmax(0, 1fr))",
+                    ranking.length <= 6
+                      ? "1fr"
+                      : "repeat(2, minmax(0, 1fr))",
                   gap:
-                    "8px 24px",
-                  paddingTop:
-                    "18px",
+                    "8px 18px",
+                  maxHeight:
+                    "34vh",
+                  overflowY:
+                    "auto",
+                  padding:
+                    "14px 6px 2px",
                   borderTop:
                     "1px solid #cbbb81",
                   textAlign:
@@ -2309,35 +2754,77 @@ function GamePage() {
                           tableNumber
                       );
 
+                    const medal =
+                      index === 0
+                        ? "🥇"
+                        : index === 1
+                          ? "🥈"
+                          : index === 2
+                            ? "🥉"
+                            : `${index + 1}位`;
+
                     return (
                       <div
                         key={
                           tableNumber
                         }
                         style={{
+                          display:
+                            "flex",
+                          alignItems:
+                            "center",
+                          gap:
+                            "10px",
+                          minHeight:
+                            "38px",
                           padding:
-                            "6px 8px",
+                            "7px 12px",
+                          borderRadius:
+                            "12px",
+                          background:
+                            index === 0
+                              ? "rgba(230,190,62,0.16)"
+                              : index === 1
+                                ? "rgba(160,167,176,0.12)"
+                                : index === 2
+                                  ? "rgba(181,107,54,0.11)"
+                                  : "rgba(255,255,255,0.40)",
                           fontSize:
-                            "clamp(14px, 1.5vw, 20px)",
+                            "clamp(14px, 1.35vw, 19px)",
                           fontWeight:
                             index < 3
                               ? 900
                               : 700,
                         }}
                       >
-                        {index === 0
-                          ? "🥇"
-                          : index === 1
-                            ? "🥈"
-                            : index === 2
-                              ? "🥉"
-                              : `${index + 1}位`}
-                        {"　"}
-                        {tableNumber}
-                        卓{" "}
-                        {
-                          horse?.horseName
-                        }
+                        <span
+                          style={{
+                            flex:
+                              "0 0 52px",
+                            textAlign:
+                              "center",
+                          }}
+                        >
+                          {medal}
+                        </span>
+
+                        <span
+                          style={{
+                            minWidth: 0,
+                            overflow:
+                              "hidden",
+                            textOverflow:
+                              "ellipsis",
+                            whiteSpace:
+                              "nowrap",
+                          }}
+                        >
+                          {tableNumber}
+                          卓{" "}
+                          {
+                            horse?.horseName
+                          }
+                        </span>
                       </div>
                     );
                   }

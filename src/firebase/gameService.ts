@@ -12,6 +12,8 @@ import { db } from "./index";
 
 export type Player = {
 
+  id: string;
+
   playerName: string;
 
   horseName: string;
@@ -62,6 +64,10 @@ export async function setRaceStarted(
           ? Date.now()
           : 0,
 
+      /*
+       * 旧・共通イベント欄はnoneのまま残す。
+       * バナナ本体は各players/{id}へ書き込む。
+       */
       eventType:
         "none",
 
@@ -111,6 +117,9 @@ export function subscribePlayers(
 
 
             return {
+
+              id:
+                document.id,
 
               playerName:
                 data.playerName ?? "",
@@ -179,7 +188,10 @@ export function subscribeRaceStarted(
 
 
 /*
- * 🍌 バナナイベントを発生
+ * 旧・共通バナナイベントAPI
+ *
+ * 既存コードとの互換性のため残す。
+ * 新しい本番GamePageでは使用しない。
  */
 
 export async function setRaceEvent(
@@ -215,10 +227,6 @@ export async function setRaceEvent(
 
 }
 
-
-/*
- * 🍌 バナナイベントを監視
- */
 
 export function subscribeRaceEvent(
   callback: (
@@ -268,10 +276,6 @@ export function subscribeRaceEvent(
 
 export async function resetGame() {
 
-  /*
-   * レース停止
-   */
-
   await setDoc(
 
     doc(
@@ -305,10 +309,6 @@ export async function resetGame() {
 
   );
 
-
-  /*
-   * 参加者を全削除
-   */
 
   const snapshot =
     await getDocs(

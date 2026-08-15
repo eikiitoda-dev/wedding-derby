@@ -52,8 +52,8 @@ const JOCKEY_COLORS = [
   "#b66d38",
 ];
 
-const DEPTH_Y = [0.57, 0.72, 0.865];
-const DEPTH_SCALE = [0.78, 0.94, 1.08];
+const DEPTH_Y = [0.44, 0.57, 0.70, 0.83];
+const DEPTH_SCALE = [0.84, 0.92, 1.00, 1.08];
 
 function clamp(
   value: number,
@@ -695,7 +695,7 @@ function GamePage() {
       height: number,
       cameraProgress: number
     ) {
-      const scenicHeight = height * 0.47;
+      const scenicHeight = height * 0.28;
 
       if (
         racecourseImage.complete &&
@@ -735,7 +735,7 @@ function GamePage() {
       ctx.fillStyle = blend;
       ctx.fillRect(0, scenicHeight - 55, width, 120);
 
-      const grassTop = height * 0.40;
+      const grassTop = height * 0.24;
       const grass = ctx.createLinearGradient(0, grassTop, 0, height);
       grass.addColorStop(0, "rgba(103,137,82,0.84)");
       grass.addColorStop(0.22, "#6d8f5d");
@@ -810,7 +810,7 @@ function GamePage() {
 
       ctx.globalAlpha = 0.08;
       for (let band = 0; band < 3; band += 1) {
-        const y = height * [0.59, 0.73, 0.87][band];
+        const y = height * [0.53, 0.70, 0.87][band];
         const trackOffset =
           -(cameraProgress * (34 + band * 9)) % 260;
 
@@ -828,7 +828,7 @@ function GamePage() {
 
       ctx.globalAlpha = 1;
 
-      const railY = height * 0.445;
+      const railY = height * 0.305;
       ctx.strokeStyle = "rgba(250,250,250,0.92)";
       ctx.lineWidth = 4;
       ctx.beginPath();
@@ -850,7 +850,7 @@ function GamePage() {
       const speedOffset = -(cameraProgress * 62) % 230;
       for (let x = speedOffset - 230; x < width + 230; x += 230) {
         const band = Math.abs(Math.floor(x / 230)) % 5;
-        const y = height * [0.53, 0.61, 0.70, 0.80, 0.90][band];
+        const y = height * [0.45, 0.57, 0.69, 0.81, 0.91][band];
         const length = 85 + band * 24;
         const gradient = ctx.createLinearGradient(x, y, x + length, y);
         gradient.addColorStop(0, "rgba(255,255,255,0)");
@@ -875,7 +875,7 @@ function GamePage() {
         return;
       }
 
-      const top = height * 0.36;
+      const top = height * 0.245;
       const bottom = height * 0.97;
 
       ctx.fillStyle = "rgba(0,0,0,0.22)";
@@ -899,7 +899,7 @@ function GamePage() {
       ctx.save();
       ctx.translate(x - 58, top - 16);
       ctx.fillStyle = "#111111";
-      ctx.font = "900 22px sans-serif";
+      ctx.font = "900 25px sans-serif";
       ctx.textAlign = "center";
       ctx.fillText("GOAL", 18, 0);
       ctx.restore();
@@ -1027,14 +1027,14 @@ function GamePage() {
 
       const labelWidth =
         Math.max(
-          158,
-          188 * scale
+          150,
+          176 * scale
         );
 
       const labelHeight =
         Math.max(
-          28,
-          32 * scale
+          27,
+          30 * scale
         );
 
       const labelY =
@@ -1441,17 +1441,98 @@ function GamePage() {
         return;
       }
 
+      /*
+       * ゴール済みの馬は「実際にゴールした順番」を優先し、
+       * 未ゴール馬は現在のprogress順で並べる。
+       *
+       * これにより、全馬がprogress=100になった後も
+       * 右上順位と最終結果が食い違わない。
+       */
+      const finishedOrder =
+        Array.from(
+          finishedSentRef.current
+        );
+
       const sorted = [...motions].sort(
-        (a, b) => b.progress - a.progress
+        (a, b) => {
+          const aFinishedIndex =
+            finishedOrder.indexOf(
+              a.tableNumber
+            );
+
+          const bFinishedIndex =
+            finishedOrder.indexOf(
+              b.tableNumber
+            );
+
+          if (
+            aFinishedIndex >= 0 &&
+            bFinishedIndex >= 0
+          ) {
+            return (
+              aFinishedIndex -
+              bFinishedIndex
+            );
+          }
+
+          if (
+            aFinishedIndex >= 0
+          ) {
+            return -1;
+          }
+
+          if (
+            bFinishedIndex >= 0
+          ) {
+            return 1;
+          }
+
+          return (
+            b.progress -
+            a.progress
+          );
+        }
       );
 
-      const panelWidth = Math.min(245, width * 0.18);
-      const panelX = width - panelWidth - 18;
-      const panelY = 18;
-      const rowHeight = Math.max(24, Math.min(29, height * 0.032));
-      const headerHeight = 46;
-      const shown = sorted.slice(0, Math.min(11, sorted.length));
-      const panelHeight = headerHeight + rowHeight * shown.length + 14;
+      const panelWidth =
+        Math.min(
+          430,
+          width * 0.27
+        );
+
+      const panelX =
+        width -
+        panelWidth -
+        16;
+
+      const panelY = 14;
+
+      const rowHeight =
+        Math.max(
+          36,
+          Math.min(
+            43,
+            height * 0.044
+          )
+        );
+
+      const headerHeight =
+        64;
+
+      const shown =
+        sorted.slice(
+          0,
+          Math.min(
+            11,
+            sorted.length
+          )
+        );
+
+      const panelHeight =
+        headerHeight +
+        rowHeight *
+          shown.length +
+        18;
 
       roundedRect(
         panelX,
@@ -1468,10 +1549,10 @@ function GamePage() {
       ctx.stroke();
 
       ctx.fillStyle = "#ffffff";
-      ctx.font = "900 17px sans-serif";
+      ctx.font = "900 22px sans-serif";
       ctx.textAlign = "left";
       ctx.textBaseline = "middle";
-      ctx.fillText("CURRENT ORDER", panelX + 15, panelY + 22);
+      ctx.fillText("CURRENT ORDER", panelX + 20, panelY + 30);
 
       shown.forEach((motion, index) => {
         const horse = horseData.find(
@@ -1488,9 +1569,9 @@ function GamePage() {
 
         if (index < 3) {
           roundedRect(
-            panelX + 8,
+            panelX + 9,
             y - rowHeight / 2 + 2,
-            panelWidth - 16,
+            panelWidth - 18,
             rowHeight - 4,
             6
           );
@@ -1511,18 +1592,18 @@ function GamePage() {
               : index === 2
                 ? "#d68b50"
                 : "#ffffff";
-        ctx.font = "900 13px sans-serif";
+        ctx.font = "900 18px sans-serif";
         ctx.textAlign = "right";
-        ctx.fillText(String(index + 1), panelX + 29, y);
+        ctx.fillText(String(index + 1), panelX + 39, y);
 
         ctx.fillStyle = color;
-        roundedRect(panelX + 38, y - 10, 24, 20, 5);
+        roundedRect(panelX + 52, y - 14, 38, 28, 7);
         ctx.fill();
 
         ctx.fillStyle = color === "#222222" ? "#ffffff" : "#111111";
-        ctx.font = "900 10px sans-serif";
+        ctx.font = "900 14px sans-serif";
         ctx.textAlign = "center";
-        ctx.fillText(String(horse.tableNumber), panelX + 50, y);
+        ctx.fillText(String(horse.tableNumber), panelX + 71, y);
 
         const originalHorseName =
           horse.horseName ||
@@ -1532,15 +1613,15 @@ function GamePage() {
           "#ffffff";
 
         ctx.font =
-          "800 13px sans-serif";
+          "800 18px sans-serif";
 
         ctx.textAlign =
           "left";
 
         const maxNameWidth =
           Math.max(
-            50,
-            panelWidth - 84
+            70,
+            panelWidth - 126
           );
 
         let horseName =
@@ -1579,10 +1660,10 @@ function GamePage() {
         ctx.beginPath();
 
         ctx.rect(
-          panelX + 68,
+          panelX + 100,
           y -
             rowHeight / 2,
-          panelWidth - 76,
+          panelWidth - 112,
           rowHeight
         );
 
@@ -1590,7 +1671,7 @@ function GamePage() {
 
         ctx.fillText(
           horseName,
-          panelX + 70,
+          panelX + 104,
           y
         );
 
@@ -2015,15 +2096,15 @@ function GamePage() {
             return null;
           }
 
-          const depth = index % 3;
-          const groupIndex = Math.floor(index / 3);
+          const depth = index % 4;
+          const groupIndex = Math.floor(index / 4);
 
           const x =
             leftMargin +
             (motion.progress - camera) *
               pixelsPerProgress;
 
-          const offsetPattern = [0, -11, 11, -6];
+          const offsetPattern = [0, -7, 7];
           const y =
             height * DEPTH_Y[depth] +
             offsetPattern[groupIndex % offsetPattern.length];
@@ -2172,11 +2253,11 @@ function GamePage() {
               left:
                 "50%",
               bottom:
-                "72px",
+                "54px",
               transform:
                 "translateX(-50%)",
               width:
-                "min(68vw, 980px)",
+                "min(62vw, 900px)",
               zIndex: 25,
               pointerEvents:
                 "none",
@@ -2642,98 +2723,208 @@ function GamePage() {
             >
               <div
                 style={{
-                  fontSize:
-                    "58px",
-                  lineHeight: 1,
-                  marginBottom:
-                    "8px",
-                }}
-              >
-                🏆
-              </div>
-
-              <div
-                style={{
-                  fontSize:
-                    "clamp(18px, 2vw, 30px)",
-                  lineHeight:
-                    1.1,
-                  fontWeight:
-                    900,
-                  letterSpacing:
-                    "0.14em",
-                  color:
-                    "#7a5a00",
-                }}
-              >
-                WINNER
-              </div>
-
-              <div
-                style={{
                   margin:
-                    "14px auto 20px",
-                  padding:
-                    "14px 24px",
-                  maxWidth:
-                    "760px",
-                  borderRadius:
-                    "18px",
-                  border:
-                    "2px solid rgba(188,145,31,0.35)",
-                  background:
-                    "rgba(255,255,255,0.82)",
-                  boxShadow:
-                    "0 7px 20px rgba(110,80,10,0.10)",
-                }}
-              >
-                <div
-                  style={{
-                    fontSize:
-                      "clamp(34px, 4.5vw, 58px)",
-                    lineHeight:
-                      1.12,
-                    fontWeight:
-                      900,
-                    wordBreak:
-                      "break-word",
-                  }}
-                >
-                  {winner.tableNumber}
-                  卓{" "}
-                  {winner.horseName}
-                </div>
-              </div>
-
-              <div
-                style={{
-                  margin:
-                    "0 auto 16px",
+                    "4px auto 22px",
                   fontSize:
-                    "clamp(14px, 1.4vw, 19px)",
+                    "clamp(22px, 2.2vw, 32px)",
                   fontWeight:
                     800,
                   color:
-                    "#6f6450",
+                    "#665b49",
+                  letterSpacing:
+                    "0.08em",
                 }}
               >
                 FINAL RESULT
               </div>
 
+              {/* 1〜3位は縦に大きく表示 */}
               <div
                 style={{
                   display:
                     "grid",
                   gridTemplateColumns:
-                    ranking.length <= 6
-                      ? "1fr"
-                      : "repeat(2, minmax(0, 1fr))",
+                    "1fr",
+                  gap:
+                    "8px",
+                  margin:
+                    "0 auto 14px",
+                  maxWidth:
+                    "760px",
+                }}
+              >
+                {ranking
+                  .slice(
+                    0,
+                    3
+                  )
+                  .map(
+                    (
+                      tableNumber,
+                      index
+                    ) => {
+                      const horse =
+                        horses.find(
+                          (item) =>
+                            item.tableNumber ===
+                            tableNumber
+                        );
+
+                      const medal =
+                        index === 0
+                          ? "🥇"
+                          : index === 1
+                            ? "🥈"
+                            : "🥉";
+
+                      return (
+                        <div
+                          key={
+                            tableNumber
+                          }
+                          style={{
+                            display:
+                              "grid",
+                            gridTemplateColumns:
+                              "76px 1fr",
+                            alignItems:
+                              "center",
+                            minHeight:
+                              index === 0
+                                ? "58px"
+                                : "50px",
+                            padding:
+                              index === 0
+                                ? "8px 18px"
+                                : "6px 18px",
+                            borderRadius:
+                              "14px",
+                            border:
+                              index === 0
+                                ? "2px solid rgba(205,160,33,0.58)"
+                                : index === 1
+                                  ? "2px solid rgba(150,155,160,0.34)"
+                                  : "2px solid rgba(181,107,54,0.30)",
+                            background:
+                              index === 0
+                                ? "rgba(255,245,196,0.88)"
+                                : index === 1
+                                  ? "rgba(244,245,246,0.86)"
+                                  : "rgba(247,224,206,0.76)",
+                            fontWeight:
+                              900,
+                          }}
+                        >
+                          <div
+                            style={{
+                              textAlign:
+                                "center",
+                              fontSize:
+                                index === 0
+                                  ? "28px"
+                                  : "24px",
+                            }}
+                          >
+                            {medal}
+                          </div>
+
+                          <div
+                            style={{
+                              display:
+                                "flex",
+                              alignItems:
+                                "center",
+                              gap:
+                                "12px",
+                              minWidth:
+                                0,
+                              fontSize:
+                                index === 0
+                                  ? "clamp(21px, 2.2vw, 32px)"
+                                  : "clamp(18px, 1.8vw, 26px)",
+                            }}
+                          >
+                            <span
+                              style={{
+                                flex:
+                                  "0 0 auto",
+                              }}
+                            >
+                              {index + 1}位
+                            </span>
+
+                            <span
+                              style={{
+                                display:
+                                  "inline-flex",
+                                alignItems:
+                                  "center",
+                                justifyContent:
+                                  "center",
+                                minWidth:
+                                  index === 0
+                                    ? "46px"
+                                    : "40px",
+                                height:
+                                  index === 0
+                                    ? "42px"
+                                    : "36px",
+                                padding:
+                                  "0 8px",
+                                borderRadius:
+                                  "8px",
+                                background:
+                                  getColor(
+                                    tableNumber
+                                  ),
+                                color:
+                                  getColor(
+                                    tableNumber
+                                  ) ===
+                                  "#222222"
+                                    ? "#ffffff"
+                                    : "#111111",
+                                boxShadow:
+                                  "inset 0 0 0 2px rgba(0,0,0,0.16)",
+                                fontWeight:
+                                  900,
+                                flex:
+                                  "0 0 auto",
+                              }}
+                            >
+                              {tableNumber}
+                            </span>
+
+                            <span
+                              style={{
+                                minWidth:
+                                  0,
+                                overflow:
+                                  "hidden",
+                                textOverflow:
+                                  "ellipsis",
+                                whiteSpace:
+                                  "nowrap",
+                              }}
+                            >
+                              {horse?.horseName}
+                            </span>
+                          </div>
+                        </div>
+                      );
+                    }
+                  )}
+              </div>
+
+              {/* 4位以降は、4〜7位を左、8〜11位を右 */}
+              <div
+                style={{
+                  display:
+                    "grid",
+                  gridTemplateColumns:
+                    "repeat(2, minmax(0, 1fr))",
                   gap:
                     "8px 18px",
-                  maxHeight:
-                    "34vh",
-                  overflowY:
-                    "auto",
                   padding:
                     "14px 6px 2px",
                   borderTop:
@@ -2742,93 +2933,281 @@ function GamePage() {
                     "left",
                 }}
               >
-                {ranking.map(
-                  (
-                    tableNumber,
-                    index
-                  ) => {
-                    const horse =
-                      horses.find(
-                        (item) =>
-                          item.tableNumber ===
-                          tableNumber
-                      );
+                <div
+                  style={{
+                    display:
+                      "grid",
+                    gap:
+                      "8px",
+                    alignContent:
+                      "start",
+                  }}
+                >
+                  {ranking
+                    .slice(
+                      3,
+                      7
+                    )
+                    .map(
+                      (
+                        tableNumber,
+                        index
+                      ) => {
+                        const horse =
+                          horses.find(
+                            (item) =>
+                              item.tableNumber ===
+                              tableNumber
+                          );
 
-                    const medal =
-                      index === 0
-                        ? "🥇"
-                        : index === 1
-                          ? "🥈"
-                          : index === 2
-                            ? "🥉"
-                            : `${index + 1}位`;
+                        const rank =
+                          index + 4;
 
-                    return (
-                      <div
-                        key={
-                          tableNumber
-                        }
-                        style={{
-                          display:
-                            "flex",
-                          alignItems:
-                            "center",
-                          gap:
-                            "10px",
-                          minHeight:
-                            "38px",
-                          padding:
-                            "7px 12px",
-                          borderRadius:
-                            "12px",
-                          background:
-                            index === 0
-                              ? "rgba(230,190,62,0.16)"
-                              : index === 1
-                                ? "rgba(160,167,176,0.12)"
-                                : index === 2
-                                  ? "rgba(181,107,54,0.11)"
-                                  : "rgba(255,255,255,0.40)",
-                          fontSize:
-                            "clamp(14px, 1.35vw, 19px)",
-                          fontWeight:
-                            index < 3
-                              ? 900
-                              : 700,
-                        }}
-                      >
-                        <span
-                          style={{
-                            flex:
-                              "0 0 52px",
-                            textAlign:
-                              "center",
-                          }}
-                        >
-                          {medal}
-                        </span>
+                        return (
+                          <div
+                            key={
+                              tableNumber
+                            }
+                            style={{
+                              display:
+                                "grid",
+                              gridTemplateColumns:
+                                "58px 1fr",
+                              alignItems:
+                                "center",
+                              gap:
+                                "8px",
+                              minHeight:
+                                "40px",
+                              padding:
+                                "7px 12px",
+                              borderRadius:
+                                "11px",
+                              background:
+                                "rgba(255,255,255,0.52)",
+                              fontSize:
+                                "clamp(14px, 1.3vw, 18px)",
+                              fontWeight:
+                                800,
+                            }}
+                          >
+                            <span
+                              style={{
+                                textAlign:
+                                  "right",
+                              }}
+                            >
+                              {rank}位
+                            </span>
 
-                        <span
-                          style={{
-                            minWidth: 0,
-                            overflow:
-                              "hidden",
-                            textOverflow:
-                              "ellipsis",
-                            whiteSpace:
-                              "nowrap",
-                          }}
-                        >
-                          {tableNumber}
-                          卓{" "}
-                          {
-                            horse?.horseName
-                          }
-                        </span>
-                      </div>
-                    );
-                  }
-                )}
+                            <span
+                              style={{
+                                display:
+                                  "flex",
+                                alignItems:
+                                  "center",
+                                gap:
+                                  "9px",
+                                minWidth:
+                                  0,
+                              }}
+                            >
+                              <span
+                                style={{
+                                  display:
+                                    "inline-flex",
+                                  alignItems:
+                                    "center",
+                                  justifyContent:
+                                    "center",
+                                  minWidth:
+                                    "30px",
+                                  height:
+                                    "28px",
+                                  padding:
+                                    "0 6px",
+                                  borderRadius:
+                                    "6px",
+                                  background:
+                                    getColor(
+                                      tableNumber
+                                    ),
+                                  color:
+                                    getColor(
+                                      tableNumber
+                                    ) ===
+                                    "#222222"
+                                      ? "#ffffff"
+                                      : "#111111",
+                                  boxShadow:
+                                    "inset 0 0 0 1px rgba(0,0,0,0.18)",
+                                  fontWeight:
+                                    900,
+                                  flex:
+                                    "0 0 auto",
+                                }}
+                              >
+                                {tableNumber}
+                              </span>
+
+                              <span
+                                style={{
+                                  minWidth:
+                                    0,
+                                  overflow:
+                                    "hidden",
+                                  textOverflow:
+                                    "ellipsis",
+                                  whiteSpace:
+                                    "nowrap",
+                                }}
+                              >
+                                {horse?.horseName}
+                              </span>
+                            </span>
+                          </div>
+                        );
+                      }
+                    )}
+                </div>
+
+                <div
+                  style={{
+                    display:
+                      "grid",
+                    gap:
+                      "8px",
+                    alignContent:
+                      "start",
+                  }}
+                >
+                  {ranking
+                    .slice(
+                      7,
+                      11
+                    )
+                    .map(
+                      (
+                        tableNumber,
+                        index
+                      ) => {
+                        const horse =
+                          horses.find(
+                            (item) =>
+                              item.tableNumber ===
+                              tableNumber
+                          );
+
+                        const rank =
+                          index + 8;
+
+                        return (
+                          <div
+                            key={
+                              tableNumber
+                            }
+                            style={{
+                              display:
+                                "grid",
+                              gridTemplateColumns:
+                                "58px 1fr",
+                              alignItems:
+                                "center",
+                              gap:
+                                "8px",
+                              minHeight:
+                                "40px",
+                              padding:
+                                "7px 12px",
+                              borderRadius:
+                                "11px",
+                              background:
+                                "rgba(255,255,255,0.52)",
+                              fontSize:
+                                "clamp(14px, 1.3vw, 18px)",
+                              fontWeight:
+                                800,
+                            }}
+                          >
+                            <span
+                              style={{
+                                textAlign:
+                                  "right",
+                              }}
+                            >
+                              {rank}位
+                            </span>
+
+                            <span
+                              style={{
+                                display:
+                                  "flex",
+                                alignItems:
+                                  "center",
+                                gap:
+                                  "9px",
+                                minWidth:
+                                  0,
+                              }}
+                            >
+                              <span
+                                style={{
+                                  display:
+                                    "inline-flex",
+                                  alignItems:
+                                    "center",
+                                  justifyContent:
+                                    "center",
+                                  minWidth:
+                                    "30px",
+                                  height:
+                                    "28px",
+                                  padding:
+                                    "0 6px",
+                                  borderRadius:
+                                    "6px",
+                                  background:
+                                    getColor(
+                                      tableNumber
+                                    ),
+                                  color:
+                                    getColor(
+                                      tableNumber
+                                    ) ===
+                                    "#222222"
+                                      ? "#ffffff"
+                                      : "#111111",
+                                  boxShadow:
+                                    "inset 0 0 0 1px rgba(0,0,0,0.18)",
+                                  fontWeight:
+                                    900,
+                                  flex:
+                                    "0 0 auto",
+                                }}
+                              >
+                                {tableNumber}
+                              </span>
+
+                              <span
+                                style={{
+                                  minWidth:
+                                    0,
+                                  overflow:
+                                    "hidden",
+                                  textOverflow:
+                                    "ellipsis",
+                                  whiteSpace:
+                                    "nowrap",
+                                }}
+                              >
+                                {horse?.horseName}
+                              </span>
+                            </span>
+                          </div>
+                        );
+                      }
+                    )}
+                </div>
               </div>
             </div>
           </div>

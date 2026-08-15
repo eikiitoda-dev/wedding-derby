@@ -17,6 +17,8 @@ import {
 import "../styles/derby.css";
 
 
+
+
 function AdminPage() {
 
   const navigate =
@@ -50,46 +52,38 @@ function AdminPage() {
 
   async function handleStartRace() {
 
-  const confirmed =
-    window.confirm(
-      "レースを開始しますか？"
-    );
+    const confirmed =
+      window.confirm(
+        "レースを開始しますか？"
+      );
 
 
-  if (!confirmed) {
-    return;
-  }
+    if (!confirmed) {
+      return;
+    }
 
 
-  try {
+    try {
 
-    /*
-     * レース開始
-     */
-
-    await setRaceStarted(
-      true
-    );
+      await setRaceStarted(
+        true
+      );
 
 
-    /*
-     * Game画面へ移動
-     */
-
-    navigate("/game");
+      navigate("/game");
 
 
-  } catch (error) {
+    } catch (error) {
 
-    console.error(error);
+      console.error(error);
 
-    alert(
-      "レース開始に失敗しました。"
-    );
+      alert(
+        "レース開始に失敗しました。"
+      );
+
+    }
 
   }
-
-}
 
 
   /*
@@ -151,7 +145,9 @@ function AdminPage() {
       </h1>
 
 
-      <div className="card">
+      <div
+        className="card"
+      >
 
         <h2>
           🏇 出走馬一覧
@@ -176,11 +172,15 @@ function AdminPage() {
 
         {
           players.map(
-            (player, index) => (
+            (
+              player,
+              index
+            ) => (
 
               <div
                 className="horse"
                 key={
+                  player.id ||
                   `${player.tableNumber}-${index}`
                 }
               >
@@ -231,8 +231,10 @@ function AdminPage() {
 
       <div
         style={{
-          marginTop: "30px",
-          paddingTop: "20px",
+          marginTop:
+            "30px",
+          paddingTop:
+            "20px",
           borderTop:
             "1px solid #ddd",
         }}
@@ -242,7 +244,9 @@ function AdminPage() {
           onClick={
             handleResetGame
           }
-          disabled={resetting}
+          disabled={
+            resetting
+          }
           style={{
             background:
               "#777",

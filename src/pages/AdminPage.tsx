@@ -10,6 +10,7 @@ import {
 
 import {
   subscribePlayers,
+  subscribeRaceStarted,
   setRaceStarted,
   resetGame,
   type Player,
@@ -35,11 +36,30 @@ function AdminPage() {
     setResetting,
   ] = useState(false);
 
+  const [
+    raceStarted,
+    setRaceStartedState,
+  ] = useState(false);
 
-  useEffect(() => {
+useEffect(() => {
 
     return subscribePlayers(
       setPlayers
+    );
+
+  }, []);
+
+
+  useEffect(() => {
+
+    return subscribeRaceStarted(
+      (
+        started
+      ) => {
+        setRaceStartedState(
+          started
+        );
+      }
     );
 
   }, []);
@@ -693,7 +713,7 @@ function AdminPage() {
           </div>
 
 
-          <div
+            <div
             style={{
               display:
                 "grid",
@@ -704,10 +724,84 @@ function AdminPage() {
             }}
           >
 
+            <div
+              style={{
+                padding:
+                  "16px 18px",
+                border:
+                  raceStarted
+                    ? "1px solid rgba(177,70,59,0.24)"
+                    : "1px solid rgba(67,132,83,0.20)",
+                borderRadius:
+                  "16px",
+                background:
+                  raceStarted
+                    ? "rgba(255,242,239,0.96)"
+                    : "rgba(242,250,244,0.96)",
+                textAlign:
+                  "center",
+              }}
+            >
+
+              <div
+                style={{
+                  color:
+                    raceStarted
+                      ? "#9a4038"
+                      : "#467851",
+                  fontSize:
+                    "11px",
+                  fontWeight:
+                    900,
+                  letterSpacing:
+                    "0.12em",
+                }}
+              >
+                RACE STATUS
+              </div>
+
+              <div
+                style={{
+                  marginTop:
+                    "4px",
+                  color:
+                    raceStarted
+                      ? "#7f302a"
+                      : "#355e3d",
+                  fontSize:
+                    "18px",
+                  fontWeight:
+                    900,
+                }}
+              >
+                {
+                  raceStarted
+                    ? "🔴 レース開催中"
+                    : "🟢 レース待機中"
+                }
+              </div>
+
+              <div
+                style={{
+                  marginTop:
+                    "4px",
+                  color:
+                    "#7d746b",
+                  fontSize:
+                    "11px",
+                }}
+              >
+                レース映像・進捗・順位は大スクリーン用レース画面で確認します
+              </div>
+
+            </div>
+
+
             <button
               type="button"
               disabled={
-                players.length === 0
+                players.length === 0 ||
+                raceStarted
               }
               onClick={
                 handleStartRace
@@ -722,11 +816,13 @@ function AdminPage() {
                 borderRadius:
                   "18px",
                 background:
-                  players.length > 0
+                  players.length > 0 &&
+                  !raceStarted
                     ? "linear-gradient(135deg, #9c742f, #c7a65c)"
                     : "#d7d0c6",
                 color:
-                  players.length > 0
+                  players.length > 0 &&
+                  !raceStarted
                     ? "#ffffff"
                     : "#80776e",
                 fontSize:
@@ -734,11 +830,13 @@ function AdminPage() {
                 fontWeight:
                   900,
                 boxShadow:
-                  players.length > 0
+                  players.length > 0 &&
+                  !raceStarted
                     ? "0 12px 26px rgba(137,101,43,0.26)"
                     : "none",
                 cursor:
-                  players.length > 0
+                  players.length > 0 &&
+                  !raceStarted
                     ? "pointer"
                     : "default",
               }}

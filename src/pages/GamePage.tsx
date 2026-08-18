@@ -152,9 +152,6 @@ function GamePage() {
   const animationRef =
     useRef<number | null>(null);
 
-  const lastTimeRef =
-    useRef<number | null>(null);
-
   const elapsedRef =
     useRef(0);
 
@@ -301,6 +298,20 @@ function GamePage() {
       );
   }, [players]);
 
+
+  const horseTableKey =
+    useMemo(
+      () =>
+        horses
+          .map(
+            horse =>
+              horse.tableNumber
+          )
+          .join("|"),
+      [horses]
+    );
+
+
   useEffect(() => {
     horsesRef.current = horses;
   }, [horses]);
@@ -324,10 +335,12 @@ function GamePage() {
   }, []);
 
   // 重要：
-  // レース開始処理は raceStarted / raceId が
-  // 変わったときだけ実行する。
-  // ムチでplayersやhorsesが更新されても
-  // カウントダウンを再実行しない。
+  // raceId は setRaceStarted(true) 時の Date.now()。
+  // これをレース全体の「共通時計」として使う。
+  //
+  // そのため、GamePage がバックグラウンドになったり
+  // 途中で再読み込みされても、3秒カウントダウンや
+  // レース経過時間が端末側だけで止まらない。
   useEffect(() => {
     if (!raceStarted) {
       setCount(3);
@@ -340,12 +353,10 @@ function GamePage() {
         new Set();
 
       elapsedRef.current = 0;
-      lastTimeRef.current = null;
 
       return;
     }
 
-    setCount(3);
     setRanking([]);
     setRaceProgress(0);
 
@@ -366,44 +377,72 @@ function GamePage() {
       new Set();
 
     elapsedRef.current = 0;
-    lastTimeRef.current = null;
 
-    void setAllPlayersFinished(
-      false
-    );
+    /*
+     * レース開始直後だけ finished を初期化する。
+     * 途中で GamePage を再読み込みした時に、
+     * すでにゴールした参加者を false に戻さない。
+     */
+    if (
+      raceId > 0 &&
+      Date.now() - raceId <
+        5_000
+    ) {
+      void setAllPlayersFinished(
+        false
+      );
+    }
 
-    let current = 3;
+    const countdownEndsAt =
+      raceId + 3_000;
 
-    const timer =
-      window.setInterval(() => {
-        current -= 1;
+    const updateCountdown =
+      () => {
+        const remainingMs =
+          countdownEndsAt -
+          Date.now();
+
+        const nextCount =
+          remainingMs > 0
+            ? Math.min(
+                3,
+                Math.ceil(
+                  remainingMs /
+                  1_000
+                )
+              )
+            : 0;
 
         setCount(
-          Math.max(current, 0)
+          nextCount
         );
+      };
 
-        if (current <= 0) {
-          window.clearInterval(
-            timer
-          );
-        }
-      }, 1000);
+    updateCountdown();
+
+    const timer =
+      window.setInterval(
+        updateCountdown,
+        100
+      );
 
     return () => {
-      window.clearInterval(timer);
+      window.clearInterval(
+        timer
+      );
     };
   }, [
     raceStarted,
     raceId,
+    horseTableKey,
   ]);
 
 
   // 🍌 参加者ごとの個別バナナ
   //
-  // 全員一斉ではなく、各参加者に3回ずつ、
-  // それぞれ別のタイミングで発生させる。
-  // タイミングは raceId と参加者IDから決めるため、
-  // GamePageが再描画されても同じレース中に予定が変わらない。
+  // バナナも raceId を基準にした「絶対時刻」で管理する。
+  // GamePage を途中で開き直しても、
+  // 予定時刻が最初からやり直しにならない。
   useEffect(() => {
     if (
       !raceStarted ||
@@ -426,6 +465,9 @@ function GamePage() {
     const timers:
       number[] = [];
 
+    const raceRunStartedAt =
+      raceId + 3_000;
+
     const hashText =
       (text: string) => {
         let hash = 2166136261;
@@ -443,6 +485,32 @@ function GamePage() {
         }
 
         return hash >>> 0;
+      };
+
+    const clearBanana =
+      async (
+        playerId: string
+      ) => {
+        try {
+          await updateDoc(
+            doc(
+              db,
+              "players",
+              playerId
+            ),
+            {
+              eventType:
+                "none",
+              eventExpiresAt:
+                0,
+            }
+          );
+        } catch (error) {
+          console.error(
+            "個別バナナ終了エラー",
+            error
+          );
+        }
       };
 
     const playerIds =
@@ -475,68 +543,104 @@ function GamePage() {
                 `${String(raceId).slice(-8)}${eventIndex + 1}${hash % 1000}`
               );
 
-            const startTimer =
+            const eventStartsAt =
+              raceRunStartedAt +
+              delay;
+
+            const eventEndsAt =
+              eventStartsAt +
+              bananaDuration;
+
+            const now =
+              Date.now();
+
+            /*
+             * すでに終了済みのイベントは再発生させない。
+             */
+            if (
+              now >= eventEndsAt
+            ) {
+              return;
+            }
+
+            const startBanana =
+              async () => {
+                /*
+                 * バックグラウンド制限などでタイマーが遅れて、
+                 * すでに終了時刻を過ぎていた場合は何もしない。
+                 */
+                if (
+                  Date.now() >=
+                    eventEndsAt
+                ) {
+                  return;
+                }
+
+                try {
+                  await updateDoc(
+                    doc(
+                      db,
+                      "players",
+                      playerId
+                    ),
+                    {
+                      eventType:
+                        "banana",
+                      eventId,
+                      eventExpiresAt:
+                        eventEndsAt,
+                    }
+                  );
+                } catch (error) {
+                  console.error(
+                    "個別バナナ開始エラー",
+                    error
+                  );
+                }
+              };
+
+            /*
+             * GamePageを開き直した時点ですでにイベント時間内なら、
+             * 残り時間だけ有効なバナナをすぐ復元する。
+             */
+            if (
+              now >= eventStartsAt
+            ) {
+              void startBanana();
+            } else {
+              const startTimer =
+                window.setTimeout(
+                  () => {
+                    void startBanana();
+                  },
+                  eventStartsAt -
+                    now
+                );
+
+              timers.push(
+                startTimer
+              );
+            }
+
+            const endDelay =
+              Math.max(
+                0,
+                eventEndsAt -
+                  Date.now()
+              );
+
+            const endTimer =
               window.setTimeout(
-                async () => {
-                  try {
-                    await updateDoc(
-                      doc(
-                        db,
-                        "players",
-                        playerId
-                      ),
-                      {
-                        eventType:
-                          "banana",
-                        eventId,
-                        eventExpiresAt:
-                          Date.now() +
-                          bananaDuration,
-                      }
-                    );
-                  } catch (error) {
-                    console.error(
-                      "個別バナナ開始エラー",
-                      error
-                    );
-                  }
-
-                  const endTimer =
-                    window.setTimeout(
-                      async () => {
-                        try {
-                          await updateDoc(
-                            doc(
-                              db,
-                              "players",
-                              playerId
-                            ),
-                            {
-                              eventType:
-                                "none",
-                              eventExpiresAt:
-                                0,
-                            }
-                          );
-                        } catch (error) {
-                          console.error(
-                            "個別バナナ終了エラー",
-                            error
-                          );
-                        }
-                      },
-                      bananaDuration
-                    );
-
-                  timers.push(
-                    endTimer
+                () => {
+                  void clearBanana(
+                    playerId
                   );
                 },
-                delay
+                endDelay
               );
 
             timers.push(
-              startTimer
+              endTimer
             );
           }
         );
@@ -558,6 +662,7 @@ function GamePage() {
     raceId,
     playerIdKey,
   ]);
+
 
   useEffect(() => {
     const canvasCandidate =
@@ -2004,28 +2109,58 @@ function GamePage() {
       const height =
         rect.height;
 
+      /*
+       * requestAnimationFrame の間隔ではなく、
+       * raceId から計算した「本当の経過時間」まで
+       * シミュレーションを追いつかせる。
+       *
+       * バックグラウンドでRAFが止まっても、
+       * 復帰時に止まっていた秒数ぶんを小刻みに再計算する。
+       * 再読み込み時も0秒から現在時刻まで追いつく。
+       */
       if (
-        lastTimeRef.current ===
-        null
+        raceStarted &&
+        count === 0 &&
+        raceId > 0
       ) {
-        lastTimeRef.current =
-          now;
+        const raceRunStartedAt =
+          raceId + 3_000;
+
+        const targetElapsed =
+          Math.max(
+            0,
+            (
+              Date.now() -
+              raceRunStartedAt
+            ) /
+              1_000
+          );
+
+        let catchUp =
+          targetElapsed -
+          elapsedRef.current;
+
+        const maxStep =
+          0.05;
+
+        while (
+          catchUp >
+            0.0001
+        ) {
+          const step =
+            Math.min(
+              maxStep,
+              catchUp
+            );
+
+          updateRace(
+            step
+          );
+
+          catchUp -=
+            step;
+        }
       }
-
-      const deltaSeconds =
-        clamp(
-          (now -
-            lastTimeRef.current) /
-            1000,
-          0,
-          0.05
-        );
-
-      lastTimeRef.current = now;
-
-      updateRace(
-        deltaSeconds
-      );
 
       const motions =
         motionsRef.current;

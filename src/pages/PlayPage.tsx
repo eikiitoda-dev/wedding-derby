@@ -652,23 +652,57 @@ function PlayPage() {
    * 参加者情報読み込み中
    */
 
+  const pageStyle = {
+    minHeight: "100dvh",
+    boxSizing: "border-box" as const,
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: "18px 14px",
+    background:
+      "radial-gradient(circle at top, #fff8e8 0%, #f6efe4 42%, #ece4d8 100%)",
+    color: "#2f2923",
+    fontFamily:
+      '"Hiragino Kaku Gothic ProN", "Yu Gothic", sans-serif',
+  };
+
+
+  const cardStyle = {
+    width: "min(100%, 520px)",
+    boxSizing: "border-box" as const,
+    padding: "22px 18px",
+    border: "1px solid rgba(128,98,50,0.16)",
+    borderRadius: "28px",
+    background: "rgba(255,255,255,0.94)",
+    boxShadow: "0 18px 52px rgba(85,65,42,0.15)",
+    textAlign: "center" as const,
+  };
+
+
   if (!player) {
 
     return (
 
-      <div
-        className="derby-container"
-      >
+      <div style={pageStyle}>
 
-        <div
-          className="card"
-          style={{
-            textAlign:
-              "center",
-          }}
-        >
+        <div style={cardStyle}>
 
-          <h2>
+          <div
+            style={{
+              fontSize: "42px",
+              marginBottom: "12px",
+            }}
+          >
+            🐎
+          </div>
+
+          <h2
+            style={{
+              margin: 0,
+              fontSize: "21px",
+              color: "#332c25",
+            }}
+          >
             参加者情報を読み込んでいます…
           </h2>
 
@@ -689,41 +723,32 @@ function PlayPage() {
 
     return (
 
-      <div
-        className="derby-container"
-        style={{
-          minHeight:
-            "100vh",
-          display:
-            "flex",
-          alignItems:
-            "center",
-          justifyContent:
-            "center",
-          padding:
-            "20px",
-          boxSizing:
-            "border-box",
-        }}
-      >
+      <div style={pageStyle}>
 
-        <div
-          className="card"
-          style={{
-            width:
-              "100%",
-            maxWidth:
-              "600px",
-            textAlign:
-              "center",
-          }}
-        >
+        <div style={cardStyle}>
 
           <div
             style={{
-              fontSize:
-                "90px",
+              display: "inline-block",
+              marginBottom: "12px",
+              padding: "6px 13px",
+              borderRadius: "999px",
+              background: "#f6eddb",
+              color: "#8b6b34",
+              fontSize: "12px",
+              fontWeight: 900,
+              letterSpacing: "0.12em",
+            }}
+          >
+            RACE FINISHED
+          </div>
+
+
+          <div
+            style={{
+              fontSize: "72px",
               lineHeight: 1,
+              margin: "6px 0 12px",
             }}
           >
             🏁
@@ -732,52 +757,69 @@ function PlayPage() {
 
           <h1
             style={{
-              marginBottom:
-                "8px",
+              margin: "0 0 6px",
+              color: "#30281f",
+              fontSize: "36px",
+              fontWeight: 900,
             }}
           >
-            GOAL!!
+            GOAL!
           </h1>
 
 
-          <h2>
+          <div
+            style={{
+              color: "#8b6b34",
+              fontSize: "12px",
+              fontWeight: 900,
+              letterSpacing: "0.12em",
+              marginTop: "18px",
+            }}
+          >
+            YOUR HORSE
+          </div>
+
+
+          <h2
+            style={{
+              margin: "4px 0 16px",
+              color: "#30281f",
+              fontSize: "25px",
+              fontWeight: 900,
+              wordBreak: "break-word",
+            }}
+          >
             🐎 {player.horseName}
           </h2>
 
 
           <div
             style={{
-              margin:
-                "18px auto",
-              padding:
-                "12px 18px",
-              maxWidth:
-                "280px",
-              borderRadius:
-                "16px",
-              background:
-                "#f3f3f3",
+              margin: "0 auto 18px",
+              padding: "16px",
+              border: "1px solid rgba(161,122,52,0.22)",
+              borderRadius: "18px",
+              background: "linear-gradient(135deg, #fff8df, #fffdf7)",
             }}
           >
 
             <div
               style={{
-                fontSize:
-                  "14px",
-                color:
-                  "#777",
+                color: "#776d63",
+                fontSize: "13px",
+                fontWeight: 800,
               }}
             >
               最終ポイント
             </div>
 
-
             <div
               style={{
-                fontSize:
-                  "42px",
-                fontWeight:
-                  900,
+                marginTop: "2px",
+                color: "#2c261f",
+                fontSize: "48px",
+                lineHeight: 1.1,
+                fontWeight: 900,
               }}
             >
               {player.score}
@@ -788,23 +830,23 @@ function PlayPage() {
 
           <p
             style={{
-              fontSize:
-                "20px",
-              fontWeight:
-                700,
+              margin: "0 0 5px",
+              color: "#3e3731",
+              fontSize: "18px",
+              fontWeight: 900,
             }}
           >
             お疲れさまでした！
           </p>
 
-
           <p
             style={{
-              color:
-                "#777",
+              margin: 0,
+              color: "#81786f",
+              fontSize: "13px",
             }}
           >
-            ゴール後は操作できません。
+            結果は会場スクリーンをご覧ください
           </p>
 
         </div>
@@ -825,111 +867,111 @@ function PlayPage() {
 
   return (
 
-    <div
-      className="derby-container"
-      style={{
-        minHeight:
-          "100vh",
-        display:
-          "flex",
-        alignItems:
-          "center",
-        justifyContent:
-          "center",
-        padding:
-          "20px",
-        boxSizing:
-          "border-box",
-      }}
-    >
+    <div style={pageStyle}>
 
-      <div
-        className="card"
-        style={{
-          width:
-            "100%",
-          maxWidth:
-            "600px",
-          textAlign:
-            "center",
-        }}
-      >
+      <div style={cardStyle}>
 
         <div
           style={{
-            fontSize:
-              "64px",
-            lineHeight: 1,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: "10px",
+            marginBottom: "14px",
           }}
         >
-          🐎
-        </div>
-
-
-        <h1
-          style={{
-            marginBottom:
-              "6px",
-          }}
-        >
-          {player.horseName}
-        </h1>
-
-
-        <h2
-          style={{
-            marginTop:
-              "6px",
-          }}
-        >
-          👤 {player.playerName}
-        </h2>
-
-
-        {
-          raceStarted &&
 
           <div
             style={{
-              margin:
-                "18px 0",
-              padding:
-                "12px",
-              borderRadius:
-                "15px",
-              background:
-                "#f3f3f3",
+              minWidth: 0,
+              textAlign: "left",
             }}
           >
 
             <div
               style={{
-                fontSize:
-                  "15px",
-                color:
-                  "#777",
+                color: "#9b7635",
+                fontSize: "11px",
+                fontWeight: 900,
+                letterSpacing: "0.13em",
               }}
             >
-              現在ポイント
+              YOUR HORSE
             </div>
-
 
             <div
               style={{
-                fontSize:
-                  "48px",
-                lineHeight:
-                  1.15,
-                fontWeight:
-                  900,
+                marginTop: "2px",
+                color: "#30281f",
+                fontSize: "23px",
+                lineHeight: 1.2,
+                fontWeight: 900,
+                wordBreak: "break-word",
               }}
             >
-              {player.score}
+              🐎 {player.horseName}
+            </div>
+
+            <div
+              style={{
+                marginTop: "4px",
+                color: "#766c62",
+                fontSize: "13px",
+                fontWeight: 700,
+              }}
+            >
+              👤 {player.playerName}
             </div>
 
           </div>
 
-        }
+
+          <div
+            style={{
+              flex: "0 0 auto",
+              minWidth: "78px",
+              padding: "9px 10px",
+              borderRadius: "15px",
+              background: raceStarted
+                ? "#f7efdd"
+                : "#eef3ea",
+              border: raceStarted
+                ? "1px solid #e5d2a5"
+                : "1px solid #d5e2d0",
+            }}
+          >
+
+            <div
+              style={{
+                color: "#776d63",
+                fontSize: "10px",
+                fontWeight: 900,
+              }}
+            >
+              {raceStarted ? "POINT" : "STATUS"}
+            </div>
+
+            <div
+              style={{
+                marginTop: "2px",
+                color: raceStarted
+                  ? "#6f5022"
+                  : "#41633d",
+                fontSize: raceStarted
+                  ? "28px"
+                  : "13px",
+                lineHeight: 1,
+                fontWeight: 900,
+              }}
+            >
+              {raceStarted
+                ? player.score
+                : "WAIT"}
+            </div>
+
+          </div>
+
+        </div>
 
 
         {
@@ -937,73 +979,89 @@ function PlayPage() {
 
           <div
             style={{
-              margin:
-                "10px 0 16px",
-              padding:
-                "12px",
-              borderRadius:
-                "14px",
-              background:
-                "#fff1df",
-              color:
-                "#9c3d00",
-              fontSize:
-                "20px",
-              fontWeight:
-                900,
+              margin: "0 0 14px",
+              padding: "12px",
+              borderRadius: "14px",
+              background: "#fff0df",
+              color: "#9c3d00",
+              fontSize: "17px",
+              fontWeight: 900,
             }}
           >
             🍌 踏んだ！ -{BANANA_PENALTY}ポイント
           </div>
-
         }
 
 
         {
-          bananaMessage ===
-            "avoided" &&
+          bananaMessage === "avoided" &&
 
           <div
             style={{
-              margin:
-                "10px 0 16px",
-              padding:
-                "12px",
-              borderRadius:
-                "14px",
-              background:
-                "#e9f8e9",
-              color:
-                "#26752e",
-              fontSize:
-                "20px",
-              fontWeight:
-                900,
+              margin: "0 0 14px",
+              padding: "12px",
+              borderRadius: "14px",
+              background: "#eaf7e9",
+              color: "#26752e",
+              fontSize: "17px",
+              fontWeight: 900,
             }}
           >
             ✅ バナナ回避！
           </div>
-
         }
 
 
         {
           !raceStarted &&
 
-          <div>
+          <div
+            style={{
+              padding: "26px 12px 20px",
+              borderRadius: "20px",
+              background:
+                "linear-gradient(135deg, #fbf7ef, #f5eee3)",
+              border:
+                "1px solid rgba(128,98,50,0.12)",
+            }}
+          >
 
-            <h2>
-              🟢 レース待機中
+            <div
+              style={{
+                fontSize: "54px",
+                lineHeight: 1,
+                marginBottom: "14px",
+              }}
+            >
+              🏇
+            </div>
+
+            <h2
+              style={{
+                margin: "0 0 8px",
+                color: "#332c25",
+                fontSize: "23px",
+                fontWeight: 900,
+              }}
+            >
+              レース待機中
             </h2>
 
-            <p>
-              管理者がレースを開始するまで
+            <p
+              style={{
+                margin: 0,
+                color: "#766d64",
+                fontSize: "14px",
+                lineHeight: 1.7,
+                fontWeight: 650,
+              }}
+            >
+              まもなくレースが始まります。
               <br />
-              お待ちください。
+              この画面のままお待ちください。
             </p>
 
           </div>
-
         }
 
 
@@ -1013,198 +1071,209 @@ function PlayPage() {
           <div>
 
             {
-              raceEvent.type ===
-                "banana"
+              raceEvent.type === "banana"
 
               ?
 
-              /*
-               * 🍌 バナナ
-               */
-
               <div>
 
-                <h2
+                <div
                   style={{
-                    marginBottom:
-                      "8px",
+                    marginBottom: "10px",
                   }}
                 >
-                  🍌 バナナ！
-                </h2>
+                  <div
+                    style={{
+                      color: "#bd5300",
+                      fontSize: "12px",
+                      fontWeight: 900,
+                      letterSpacing: "0.12em",
+                    }}
+                  >
+                    CAUTION!
+                  </div>
 
-
-                <p
-                  style={{
-                    margin:
-                      "0 0 12px",
-                    fontSize:
-                      "20px",
-                    fontWeight:
-                      900,
-                    color:
-                      "#bd5300",
-                  }}
-                >
-                  押すな！！
-                </p>
+                  <h2
+                    style={{
+                      margin: "3px 0 0",
+                      color: "#8d3d00",
+                      fontSize: "25px",
+                      fontWeight: 900,
+                    }}
+                  >
+                    🍌 押さないで！
+                  </h2>
+                </div>
 
 
                 <button
-                  onClick={
-                    hitBanana
-                  }
-                  disabled={
-                    pressing
-                  }
+                  type="button"
+                  onClick={hitBanana}
+                  disabled={pressing}
                   style={{
-                    width:
-                      "100%",
-                    minHeight:
-                      "200px",
-                    border:
-                      "5px solid #e1a900",
+                    width: "100%",
+                    minHeight: "230px",
+                    border: "5px solid #e1a900",
+                    borderRadius: "24px",
                     background:
-                      "linear-gradient(180deg, #fff7b5, #ffd34d)",
+                      "linear-gradient(180deg, #fff8b9, #ffd34d)",
+                    color: "#6e4200",
                     boxShadow:
-                      "0 10px 26px rgba(131,85,0,0.28)",
-                    fontSize:
-                      "86px",
-                    fontWeight:
-                      900,
-                    borderRadius:
-                      "25px",
-                    cursor:
-                      pressing
-                        ? "default"
-                        : "pointer",
-                    touchAction:
-                      "manipulation",
-                    WebkitTapHighlightColor:
-                      "transparent",
+                      "0 12px 28px rgba(131,85,0,0.24)",
+                    cursor: pressing
+                      ? "default"
+                      : "pointer",
+                    touchAction: "manipulation",
+                    WebkitTapHighlightColor: "transparent",
                   }}
                 >
 
-                  🍌
-
-                  <br />
-
-                  <span
+                  <div
                     style={{
-                      display:
-                        "inline-block",
-                      marginTop:
-                        "4px",
-                      fontSize:
-                        "25px",
-                      color:
-                        "#6e4200",
+                      fontSize: "92px",
+                      lineHeight: 1,
                     }}
                   >
-                    踏むと -{BANANA_PENALTY}
-                  </span>
+                    🍌
+                  </div>
+
+                  <div
+                    style={{
+                      marginTop: "10px",
+                      fontSize: "22px",
+                      fontWeight: 900,
+                    }}
+                  >
+                    触ると -{BANANA_PENALTY}
+                  </div>
 
                 </button>
 
 
-                <p
+                <div
                   style={{
-                    marginTop:
-                      "12px",
-                    marginBottom:
-                      0,
-                    fontSize:
-                      "16px",
-                    fontWeight:
-                      700,
-                    color:
-                      "#777",
+                    marginTop: "13px",
+                    padding: "10px 12px",
+                    borderRadius: "13px",
+                    background: "#fff7e8",
+                    color: "#75501b",
+                    fontSize: "14px",
+                    lineHeight: 1.55,
+                    fontWeight: 800,
                   }}
                 >
-                  あと {bananaSeconds} 秒
+                  あと <strong>{bananaSeconds}秒</strong>
                   <br />
-                  何も押さずに耐えて！
-                </p>
+                  何も押さずに待てば回避成功！
+                </div>
 
               </div>
 
               :
 
-              /*
-               * 通常レース
-               */
-
               <div>
 
-                <h2>
-                  🏇 レース開催中！
-                </h2>
+                <div
+                  style={{
+                    marginBottom: "10px",
+                  }}
+                >
+                  <div
+                    style={{
+                      color: "#9b7635",
+                      fontSize: "12px",
+                      fontWeight: 900,
+                      letterSpacing: "0.12em",
+                    }}
+                  >
+                    RACE ON
+                  </div>
+
+                  <h2
+                    style={{
+                      margin: "3px 0 0",
+                      color: "#332c25",
+                      fontSize: "23px",
+                      fontWeight: 900,
+                    }}
+                  >
+                    🏇 ムチで応援！
+                  </h2>
+                </div>
 
 
                 <button
-                  onClick={
-                    advanceHorse
-                  }
-                  disabled={
-                    pressing
-                  }
+                  type="button"
+                  onClick={advanceHorse}
+                  disabled={pressing}
                   style={{
-                    width:
-                      "100%",
-                    minHeight:
-                      "200px",
-                    border:
-                      "4px solid #92231d",
+                    width: "100%",
+                    minHeight: "230px",
+                    border: "4px solid #7f1d18",
+                    borderRadius: "24px",
                     background:
-                      "linear-gradient(180deg, #c83b32, #9b211b)",
-                    color:
-                      "#ffffff",
-                    boxShadow:
-                      "0 10px 24px rgba(110,20,14,0.25)",
-                    fontSize:
-                      "32px",
-                    fontWeight:
-                      900,
-                    borderRadius:
-                      "25px",
-                    cursor:
                       pressing
-                        ? "default"
-                        : "pointer",
-                    touchAction:
-                      "manipulation",
-                    WebkitTapHighlightColor:
-                      "transparent",
+                        ? "linear-gradient(180deg, #ad3932, #84201b)"
+                        : "linear-gradient(180deg, #c84339, #95231d)",
+                    color: "#ffffff",
+                    boxShadow:
+                      "0 12px 28px rgba(110,20,14,0.25)",
+                    cursor: pressing
+                      ? "default"
+                      : "pointer",
+                    touchAction: "manipulation",
+                    WebkitTapHighlightColor: "transparent",
                   }}
                 >
 
-                  🏇
-                  <br />
+                  <div
+                    style={{
+                      fontSize: "68px",
+                      lineHeight: 1,
+                    }}
+                  >
+                    🏇
+                  </div>
 
-                  {
-                    pressing
+                  <div
+                    style={{
+                      marginTop: "13px",
+                      fontSize: "29px",
+                      lineHeight: 1.15,
+                      fontWeight: 900,
+                    }}
+                  >
+                    {pressing
                       ? "ムチ！"
-                      : "ムチを入れる！"
-                  }
+                      : "ムチを入れる！"}
+                  </div>
+
+                  <div
+                    style={{
+                      marginTop: "8px",
+                      fontSize: "13px",
+                      fontWeight: 800,
+                      opacity: 0.88,
+                    }}
+                  >
+                    TAP!
+                  </div>
 
                 </button>
 
 
                 <p
                   style={{
-                    marginTop:
-                      "16px",
-                    marginBottom:
-                      0,
-                    fontSize:
-                      "15px",
-                    color:
-                      "#777",
+                    margin: "13px 0 0",
+                    color: "#766d64",
+                    fontSize: "13px",
+                    lineHeight: 1.6,
+                    fontWeight: 700,
                   }}
                 >
                   1回 +{WHIP_POINT}ポイント
                   <br />
-                  突然バナナに変わるので注意！
+                  🍌 バナナに変わったら押さないで！
                 </p>
 
               </div>
@@ -1212,7 +1281,6 @@ function PlayPage() {
             }
 
           </div>
-
         }
 
       </div>

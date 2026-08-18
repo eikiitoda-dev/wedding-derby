@@ -13,7 +13,6 @@ type HorseRig = {
   phase: number;
 };
 
-const HORSE_COUNT = 11;
 
 const JOCKEY_COLORS = [
   0xffffff,

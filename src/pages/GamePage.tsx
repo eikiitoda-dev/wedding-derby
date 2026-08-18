@@ -560,19 +560,25 @@ function GamePage() {
   ]);
 
   useEffect(() => {
-    const canvas =
+    const canvasCandidate =
       canvasRef.current;
 
-    if (!canvas) {
+    if (!canvasCandidate) {
       return;
     }
 
-    const ctx =
-      canvas.getContext("2d");
+    const contextCandidate =
+      canvasCandidate.getContext("2d");
 
-    if (!ctx) {
+    if (!contextCandidate) {
       return;
     }
+
+    const canvas: HTMLCanvasElement =
+      canvasCandidate;
+
+    const ctx: CanvasRenderingContext2D =
+      contextCandidate;
 
     let disposed = false;
 
@@ -1431,6 +1437,8 @@ function GamePage() {
     }
 
 
+    void drawRaceProgress;
+
     function drawRankingPanel(
       width: number,
       height: number,
@@ -2192,15 +2200,6 @@ function GamePage() {
     count,
   ]);
 
-  const winner =
-    ranking.length > 0
-      ? horses.find(
-          (horse) =>
-            horse.tableNumber ===
-            ranking[0]
-        )
-      : undefined;
-
   const raceFinished =
     horses.length > 0 &&
     ranking.length ===
@@ -2681,8 +2680,7 @@ function GamePage() {
           </div>
         )}
 
-      {raceFinished &&
-        winner && (
+      {raceFinished && (
           <div
             style={{
               position:
@@ -2735,7 +2733,7 @@ function GamePage() {
                     "0.08em",
                 }}
               >
-                FINAL RESULT
+                🏁 FINAL RESULT
               </div>
 
               {/* 1〜3位は縦に大きく表示 */}

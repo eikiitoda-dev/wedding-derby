@@ -52,7 +52,7 @@ const JOCKEY_COLORS = [
   "#b66d38",
 ];
 
-const DEPTH_Y = [0.44, 0.57, 0.70, 0.83];
+const DEPTH_Y = [0.37, 0.53, 0.69, 0.85];
 const DEPTH_SCALE = [0.84, 0.92, 1.00, 1.08];
 
 function clamp(
@@ -193,6 +193,36 @@ function GamePage() {
   const lastProgressUiUpdateRef =
     useRef(0);
 
+  // 大スクリーン用バナナ表示
+  const [
+    activeBananaTable,
+    setActiveBananaTable,
+  ] = useState<number | null>(null);
+
+  const [
+    bananaRemainingMs,
+    setBananaRemainingMs,
+  ] = useState(0);
+
+  const [
+    bananaHitTable,
+    setBananaHitTable,
+  ] = useState<number | null>(null);
+
+  const activeBananaTableRef =
+    useRef<number | null>(null);
+
+  const bananaRemainingMsRef =
+    useRef(0);
+
+  const previousScoresRef =
+    useRef<Map<string, number>>(
+      new Map()
+    );
+
+  const bananaHitTimerRef =
+    useRef<number | null>(null);
+
   /*
    * scoreはムチのたびに更新されるため、
    * players配列そのものをバナナタイマーの依存にすると
@@ -201,13 +231,13 @@ function GamePage() {
    * 参加者IDだけを安定したキーにして、
    * 登録人数が変わった時だけ予定を組み直す。
    */
-  const playerIdKey =
+  const playerTableKey =
     useMemo(
       () =>
         players
           .map(
             player =>
-              player.id
+              `${player.id}:${Number(player.tableNumber ?? 0)}`
           )
           .filter(Boolean)
           .sort()
@@ -346,6 +376,11 @@ function GamePage() {
       setCount(3);
       setRanking([]);
       setRaceProgress(0);
+      setActiveBananaTable(null);
+      setBananaRemainingMs(0);
+      setBananaHitTable(null);
+      activeBananaTableRef.current = null;
+      bananaRemainingMsRef.current = 0;
 
       motionsRef.current = [];
 
@@ -438,11 +473,86 @@ function GamePage() {
   ]);
 
 
-  // 🍌 参加者ごとの個別バナナ
+  // 🍌 対象卓でスコアが大きく下がったら、大画面に「直撃」を短く表示する。
+  useEffect(() => {
+    const previous =
+      previousScoresRef.current;
+
+    if (
+      raceStarted &&
+      activeBananaTable !== null
+    ) {
+      const hit =
+        players.some(player => {
+          if (
+            Number(player.tableNumber ?? 0) !==
+            activeBananaTable
+          ) {
+            return false;
+          }
+
+          const before =
+            previous.get(player.id);
+
+          return (
+            before !== undefined &&
+            Number(player.score ?? 0) <=
+              before - 100
+          );
+        });
+
+      if (hit) {
+        setBananaHitTable(
+          activeBananaTable
+        );
+
+        if (
+          bananaHitTimerRef.current !==
+          null
+        ) {
+          window.clearTimeout(
+            bananaHitTimerRef.current
+          );
+        }
+
+        bananaHitTimerRef.current =
+          window.setTimeout(
+            () => {
+              setBananaHitTable(null);
+              bananaHitTimerRef.current =
+                null;
+            },
+            1400
+          );
+      }
+    }
+
+    const next =
+      new Map<string, number>();
+
+    players.forEach(player => {
+      next.set(
+        player.id,
+        Number(player.score ?? 0)
+      );
+    });
+
+    previousScoresRef.current =
+      next;
+  }, [
+    players,
+    raceStarted,
+    activeBananaTable,
+  ]);
+
+  // 🍌 卓ごとのバナナ
   //
-  // バナナも raceId を基準にした「絶対時刻」で管理する。
-  // GamePage を途中で開き直しても、
-  // 予定時刻が最初からやり直しにならない。
+  // 全卓がレース中に1回ずつ対象になる。
+  // 対象順だけを raceId から決まるランダム順にする。
+  // この「各卓1回」はゲスト向けルール説明には表示しない。
+  //
+  // 大画面には対象の「卓番号だけ」を大きく表示。
+  // 対象卓の参加者は、表示中にいつものムチボタンを押すと -100pt。
   useEffect(() => {
     if (
       !raceStarted ||
@@ -453,214 +563,231 @@ function GamePage() {
       return;
     }
 
-    const bananaDuration =
-      5_000;
+    const bananaDuration = 4_000;
+    const firstBananaAt = 10_000;
+    const bananaInterval = 6_500;
+    const raceRunStartedAt = raceId + 3_000;
 
-    const windows = [
-      [15_000, 30_000],
-      [38_000, 55_000],
-      [63_000, 78_000],
-    ] as const;
+    const timers: number[] = [];
 
-    const timers:
-      number[] = [];
+    const tableNumbers = Array.from(
+      new Set(
+        players
+          .map(player => Number(player.tableNumber ?? 0))
+          .filter(tableNumber => Number.isFinite(tableNumber) && tableNumber > 0)
+      )
+    ).sort((a, b) => a - b);
 
-    const raceRunStartedAt =
-      raceId + 3_000;
+    // raceIdをseedにした決定的シャッフル。
+    // 再読み込みしても同じ順番になる。
+    let seed = (raceId >>> 0) || 1;
+    const random = () => {
+      seed = Math.imul(seed ^ (seed >>> 15), 1 | seed);
+      seed ^= seed + Math.imul(seed ^ (seed >>> 7), 61 | seed);
+      return ((seed ^ (seed >>> 14)) >>> 0) / 4294967296;
+    };
 
-    const hashText =
-      (text: string) => {
-        let hash = 2166136261;
+    const shuffledTables = [...tableNumbers];
 
-        for (
-          let index = 0;
-          index < text.length;
-          index += 1
-        ) {
-          hash ^= text.charCodeAt(index);
-          hash = Math.imul(
-            hash,
-            16777619
-          );
-        }
+    for (
+      let index = shuffledTables.length - 1;
+      index > 0;
+      index -= 1
+    ) {
+      const swapIndex =
+        Math.floor(random() * (index + 1));
 
-        return hash >>> 0;
-      };
+      [
+        shuffledTables[index],
+        shuffledTables[swapIndex],
+      ] = [
+        shuffledTables[swapIndex],
+        shuffledTables[index],
+      ];
+    }
 
-    const clearBanana =
-      async (
-        playerId: string
-      ) => {
-        try {
-          await updateDoc(
-            doc(
-              db,
-              "players",
-              playerId
-            ),
-            {
-              eventType:
-                "none",
-              eventExpiresAt:
-                0,
-            }
-          );
-        } catch (error) {
-          console.error(
-            "個別バナナ終了エラー",
-            error
-          );
-        }
-      };
+    const setBigScreenBanana = (
+      tableNumber: number | null,
+      remainingMs: number
+    ) => {
+      activeBananaTableRef.current = tableNumber;
+      bananaRemainingMsRef.current = remainingMs;
+      setActiveBananaTable(tableNumber);
+      setBananaRemainingMs(remainingMs);
+    };
 
-    const playerIds =
-      playerIdKey
-        .split("|")
-        .filter(Boolean);
-
-    playerIds.forEach(
-      playerId => {
-        windows.forEach(
-          (
-            [windowStart, windowEnd],
-            eventIndex
-          ) => {
-            const hash =
-              hashText(
-                `${raceId}:${playerId}:${eventIndex}`
-              );
-
-            const span =
-              windowEnd -
-              windowStart;
-
-            const delay =
-              windowStart +
-              (hash % Math.max(span, 1));
-
-            const eventId =
-              Number(
-                `${String(raceId).slice(-8)}${eventIndex + 1}${hash % 1000}`
-              );
-
-            const eventStartsAt =
-              raceRunStartedAt +
-              delay;
-
-            const eventEndsAt =
-              eventStartsAt +
-              bananaDuration;
-
-            const now =
-              Date.now();
-
-            /*
-             * すでに終了済みのイベントは再発生させない。
-             */
-            if (
-              now >= eventEndsAt
-            ) {
-              return;
-            }
-
-            const startBanana =
-              async () => {
-                /*
-                 * バックグラウンド制限などでタイマーが遅れて、
-                 * すでに終了時刻を過ぎていた場合は何もしない。
-                 */
-                if (
-                  Date.now() >=
-                    eventEndsAt
-                ) {
-                  return;
-                }
-
-                try {
-                  await updateDoc(
-                    doc(
-                      db,
-                      "players",
-                      playerId
-                    ),
-                    {
-                      eventType:
-                        "banana",
-                      eventId,
-                      eventExpiresAt:
-                        eventEndsAt,
-                    }
-                  );
-                } catch (error) {
-                  console.error(
-                    "個別バナナ開始エラー",
-                    error
-                  );
-                }
-              };
-
-            /*
-             * GamePageを開き直した時点ですでにイベント時間内なら、
-             * 残り時間だけ有効なバナナをすぐ復元する。
-             */
-            if (
-              now >= eventStartsAt
-            ) {
-              void startBanana();
-            } else {
-              const startTimer =
-                window.setTimeout(
-                  () => {
-                    void startBanana();
-                  },
-                  eventStartsAt -
-                    now
-                );
-
-              timers.push(
-                startTimer
-              );
-            }
-
-            const endDelay =
-              Math.max(
-                0,
-                eventEndsAt -
-                  Date.now()
-              );
-
-            const endTimer =
-              window.setTimeout(
-                () => {
-                  void clearBanana(
-                    playerId
-                  );
-                },
-                endDelay
-              );
-
-            timers.push(
-              endTimer
-            );
-          }
+    const setTableBanana = async (
+      tableNumber: number,
+      eventId: number,
+      eventEndsAt: number
+    ) => {
+      const targets =
+        players.filter(
+          player =>
+            Number(player.tableNumber ?? 0) ===
+            tableNumber
         );
+
+      try {
+        await Promise.all(
+          targets.map(player =>
+            updateDoc(
+              doc(db, "players", player.id),
+              {
+                eventType: "banana",
+                eventId,
+                eventExpiresAt: eventEndsAt,
+              }
+            )
+          )
+        );
+      } catch (error) {
+        console.error(
+          "卓バナナ開始エラー",
+          error
+        );
+      }
+    };
+
+    const clearTableBanana = async (
+      tableNumber: number,
+      eventId: number
+    ) => {
+      const targets =
+        players.filter(
+          player =>
+            Number(player.tableNumber ?? 0) ===
+            tableNumber
+        );
+
+      try {
+        await Promise.all(
+          targets.map(async player => {
+            // 次イベントとの競合を避けるため、現在値を読まずに
+            // この卓のイベント終了時だけnoneへ戻す。
+            await updateDoc(
+              doc(db, "players", player.id),
+              {
+                eventType: "none",
+                eventExpiresAt: 0,
+              }
+            );
+          })
+        );
+      } catch (error) {
+        console.error(
+          "卓バナナ終了エラー",
+          eventId,
+          error
+        );
+      }
+    };
+
+    shuffledTables.forEach(
+      (tableNumber, eventIndex) => {
+        const eventStartsAt =
+          raceRunStartedAt +
+          firstBananaAt +
+          eventIndex * bananaInterval;
+
+        const eventEndsAt =
+          eventStartsAt +
+          bananaDuration;
+
+        const eventId =
+          Number(
+            `${String(raceId).slice(-8)}${String(
+              eventIndex + 1
+            ).padStart(2, "0")}`
+          );
+
+        const now = Date.now();
+
+        if (now >= eventEndsAt) {
+          return;
+        }
+
+        const startBanana = () => {
+          if (Date.now() >= eventEndsAt) {
+            return;
+          }
+
+          void setTableBanana(
+            tableNumber,
+            eventId,
+            eventEndsAt
+          );
+
+          setBigScreenBanana(
+            tableNumber,
+            Math.max(0, eventEndsAt - Date.now())
+          );
+
+          const countdownTimer =
+            window.setInterval(() => {
+              const remaining =
+                Math.max(0, eventEndsAt - Date.now());
+
+              setBigScreenBanana(
+                remaining > 0 ? tableNumber : null,
+                remaining
+              );
+
+              if (remaining <= 0) {
+                window.clearInterval(countdownTimer);
+              }
+            }, 100);
+
+          timers.push(countdownTimer);
+        };
+
+        if (now >= eventStartsAt) {
+          startBanana();
+        } else {
+          const startTimer =
+            window.setTimeout(
+              startBanana,
+              eventStartsAt - now
+            );
+
+          timers.push(startTimer);
+        }
+
+        const endTimer =
+          window.setTimeout(
+            () => {
+              void clearTableBanana(
+                tableNumber,
+                eventId
+              );
+
+              if (
+                activeBananaTableRef.current ===
+                tableNumber
+              ) {
+                setBigScreenBanana(null, 0);
+              }
+            },
+            Math.max(0, eventEndsAt - Date.now())
+          );
+
+        timers.push(endTimer);
       }
     );
 
     return () => {
-      timers.forEach(
-        timer => {
-          window.clearTimeout(
-            timer
-          );
-        }
-      );
+      timers.forEach(timer => {
+        window.clearTimeout(timer);
+        window.clearInterval(timer);
+      });
+
+      setBigScreenBanana(null, 0);
     };
   }, [
     raceStarted,
     count,
     raceId,
-    playerIdKey,
+    playerTableKey,
   ]);
 
 
@@ -806,7 +933,7 @@ function GamePage() {
       height: number,
       cameraProgress: number
     ) {
-      const scenicHeight = height * 0.28;
+      const scenicHeight = height * 0.21;
 
       if (
         racecourseImage.complete &&
@@ -846,7 +973,7 @@ function GamePage() {
       ctx.fillStyle = blend;
       ctx.fillRect(0, scenicHeight - 55, width, 120);
 
-      const grassTop = height * 0.24;
+      const grassTop = height * 0.18;
       const grass = ctx.createLinearGradient(0, grassTop, 0, height);
       grass.addColorStop(0, "rgba(103,137,82,0.84)");
       grass.addColorStop(0.22, "#6d8f5d");
@@ -1115,7 +1242,7 @@ function GamePage() {
         );
       } else {
         ctx.fillStyle = "#ffffff";
-        ctx.font = "900 18px sans-serif";
+        ctx.font = "900 26px sans-serif";
         ctx.textAlign = "center";
         ctx.textBaseline = "middle";
         ctx.fillText(
@@ -1609,8 +1736,8 @@ function GamePage() {
 
       const panelWidth =
         Math.min(
-          430,
-          width * 0.27
+          620,
+          width * 0.37
         );
 
       const panelX =
@@ -1622,15 +1749,15 @@ function GamePage() {
 
       const rowHeight =
         Math.max(
-          36,
+          47,
           Math.min(
-            43,
-            height * 0.044
+            57,
+            height * 0.058
           )
         );
 
       const headerHeight =
-        64;
+        82;
 
       const shown =
         sorted.slice(
@@ -1662,7 +1789,7 @@ function GamePage() {
       ctx.stroke();
 
       ctx.fillStyle = "#ffffff";
-      ctx.font = "900 22px sans-serif";
+      ctx.font = "900 32px sans-serif";
       ctx.textAlign = "left";
       ctx.textBaseline = "middle";
       ctx.fillText("CURRENT ORDER", panelX + 20, panelY + 30);
@@ -1714,7 +1841,7 @@ function GamePage() {
         ctx.fill();
 
         ctx.fillStyle = color === "#222222" ? "#ffffff" : "#111111";
-        ctx.font = "900 14px sans-serif";
+        ctx.font = "900 20px sans-serif";
         ctx.textAlign = "center";
         ctx.fillText(String(horse.tableNumber), panelX + 71, y);
 
@@ -1726,7 +1853,7 @@ function GamePage() {
           "#ffffff";
 
         ctx.font =
-          "800 18px sans-serif";
+          "800 24px sans-serif";
 
         ctx.textAlign =
           "left";
@@ -2197,7 +2324,9 @@ function GamePage() {
       // これにより「その場でバウンドしているだけ」に見えるのを防ぐ。
       const leftMargin = width * 0.10;
       const pixelsPerProgress = width / 52;
-      const cameraFollowStart = 27;
+      // 先頭馬を画面右寄りではなく、ほぼ中央（約52%位置）で追従させる。
+      // 右側のリアルタイム順位表との重なりも避ける。
+      const cameraFollowStart = 22;
       const camera = Math.max(
         0,
         leader - cameraFollowStart
@@ -2610,9 +2739,11 @@ function GamePage() {
                   "clamp(15px, 1.4vw, 21px)",
                 fontWeight:
                   900,
+                letterSpacing:
+                  "0.08em",
               }}
             >
-              📣 レース中
+              🏆 糸田杯
             </div>
 
             <div
@@ -2625,9 +2756,11 @@ function GamePage() {
                   700,
                 opacity:
                   0.94,
+                letterSpacing:
+                  "0.08em",
               }}
             >
-              みんなでムチを送って応援！
+              1600m・レース開催中
             </div>
           </div>
         )}
@@ -2679,6 +2812,171 @@ function GamePage() {
         )}
       </div>
 
+      {/* BANANA_HIT_ALERT_V1 */}
+      {raceStarted &&
+        !raceFinished &&
+        bananaHitTable !== null && (
+          <div
+            style={{
+              position: "absolute",
+              inset: 0,
+              zIndex: 45,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              pointerEvents: "none",
+              background: "rgba(0,0,0,0.18)",
+            }}
+          >
+            <div
+              style={{
+                padding: "28px 48px",
+                borderRadius: "24px",
+                border: "4px solid #ffd95c",
+                background:
+                  "linear-gradient(145deg, rgba(117,18,10,0.98), rgba(47,7,5,0.98))",
+                boxShadow:
+                  "0 24px 80px rgba(0,0,0,0.58)",
+                textAlign: "center",
+                color: "#ffffff",
+                transform: "rotate(-1deg)",
+              }}
+            >
+              <div
+                style={{
+                  fontSize:
+                    "clamp(28px, 3vw, 48px)",
+                  fontWeight: 950,
+                  color: "#ffd95c",
+                }}
+              >
+                💥 バナナ直撃！
+              </div>
+
+              <div
+                style={{
+                  marginTop: "8px",
+                  fontSize:
+                    "clamp(58px, 6vw, 94px)",
+                  lineHeight: 1,
+                  fontWeight: 950,
+                }}
+              >
+                {bananaHitTable}卓
+              </div>
+
+              <div
+                style={{
+                  marginTop: "10px",
+                  fontSize:
+                    "clamp(30px, 3.2vw, 52px)",
+                  fontWeight: 950,
+                  color: "#ffd95c",
+                }}
+              >
+                −100pt
+              </div>
+            </div>
+          </div>
+        )}
+
+      {/* BIG_SCREEN_SCALE_V3 */}
+      {/* BANANA_NO_OVERLAP_CAMERA_CENTER_V4 */}
+      {/* BANANA_TABLE_ALERT_V1 */}
+      {raceStarted &&
+        count === 0 &&
+        !raceFinished &&
+        activeBananaTable !== null && (
+          <div
+            style={{
+              position: "absolute",
+              top: "18px",
+              left: "50%",
+              transform: "translateX(-50%)",
+              zIndex: 34,
+              width: "min(520px, 36vw)",
+              minWidth: "340px",
+              padding: "14px 22px 13px",
+              boxSizing: "border-box",
+              textAlign: "center",
+              borderRadius: "22px",
+              border: "3px solid #f0c94f",
+              background:
+                "linear-gradient(145deg, rgba(92,20,12,0.97), rgba(45,10,7,0.98))",
+              boxShadow:
+                "0 18px 48px rgba(0,0,0,0.48)",
+              color: "#ffffff",
+            }}
+          >
+            <div
+              style={{
+                fontSize: "clamp(18px, 1.7vw, 27px)",
+                fontWeight: 900,
+                color: "#ffd95c",
+                letterSpacing: "0.04em",
+              }}
+            >
+              🍌 バナナ注意！
+            </div>
+
+            <div
+              style={{
+                marginTop: "7px",
+                fontSize: "clamp(14px, 1.15vw, 18px)",
+                fontWeight: 800,
+                opacity: 0.82,
+              }}
+            >
+              対象
+            </div>
+
+            <div
+              style={{
+                marginTop: "0px",
+                fontSize: "clamp(42px, 3.8vw, 64px)",
+                lineHeight: 1,
+                fontWeight: 950,
+                color: "#ffffff",
+                textShadow: "0 5px 18px rgba(0,0,0,0.35)",
+              }}
+            >
+              {activeBananaTable}卓
+            </div>
+
+            <div
+              style={{
+                marginTop: "4px",
+                fontSize: "clamp(14px, 1.1vw, 18px)",
+                fontWeight: 900,
+                color: "#ffd95c",
+              }}
+            >
+              あと{" "}
+              {Math.max(
+                1,
+                Math.ceil(
+                  bananaRemainingMs / 1000
+                )
+              )}
+              秒
+            </div>
+
+            <div
+              style={{
+                marginTop: "4px",
+                padding: "6px 10px",
+                borderRadius: "11px",
+                background: "rgba(0,0,0,0.28)",
+                fontSize: "clamp(12px, 1vw, 16px)",
+                fontWeight: 800,
+              }}
+            >
+              この間のタップは −100pt
+            </div>
+          </div>
+        )}
+
+      {/* ITODAHI_FINAL_DESIGN_V2 */}
       {!raceStarted && (
         <div
           style={{
@@ -2690,55 +2988,167 @@ function GamePage() {
               "center",
             zIndex: 30,
             background:
-              "rgba(0,0,0,0.48)",
+              "rgba(0,0,0,0.54)",
+            backdropFilter:
+              "blur(1.5px)",
           }}
         >
           <div
             style={{
               width:
-                "min(560px, 80vw)",
+                "min(1080px, 94vw)",
               padding:
-                "34px 44px",
+                "68px 86px 58px",
               boxSizing:
                 "border-box",
               textAlign: "center",
               borderRadius:
-                "24px",
+                "28px",
+              border:
+                "1px solid rgba(224,194,101,0.72)",
               background:
-                "rgba(255,255,255,0.96)",
+                "linear-gradient(145deg, rgba(8,31,20,0.98), rgba(18,54,35,0.97))",
               boxShadow:
-                "0 18px 60px rgba(0,0,0,0.48)",
+                "0 24px 80px rgba(0,0,0,0.62), inset 0 0 0 1px rgba(255,255,255,0.05)",
+              color:
+                "#ffffff",
             }}
           >
             <div
               style={{
-                fontSize: "70px",
-                lineHeight: 1,
+                fontSize:
+                  "clamp(12px, 1.05vw, 16px)",
+                fontWeight:
+                  900,
+                letterSpacing:
+                  "0.28em",
+                color:
+                  "#dfc36d",
               }}
             >
-              🏇
+              WEDDING DERBY
             </div>
 
-            <h1
+            <div
+              style={{
+                width:
+                  "92px",
+                height:
+                  "2px",
+                margin:
+                  "18px auto 14px",
+                background:
+                  "linear-gradient(90deg, transparent, #e4c865, transparent)",
+              }}
+            />
+
+            <div
               style={{
                 margin:
-                  "14px 0 8px",
+                  "0",
+                fontSize:
+                  "clamp(72px, 8vw, 124px)",
+                lineHeight:
+                  1.05,
+                fontWeight:
+                  900,
+                letterSpacing:
+                  "0.14em",
+                textShadow:
+                  "0 6px 24px rgba(0,0,0,0.38)",
+                transform:
+                  "translateX(0.07em)",
               }}
             >
-              レース待機中
-            </h1>
+              糸田杯
+            </div>
+
+            <div
+              style={{
+                marginTop:
+                  "14px",
+                fontSize:
+                  "clamp(15px, 1.35vw, 20px)",
+                fontWeight:
+                  800,
+                letterSpacing:
+                  "0.18em",
+                color:
+                  "rgba(255,255,255,0.72)",
+              }}
+            >
+              1600m
+            </div>
+
+            <div
+              style={{
+                width:
+                  "92px",
+                height:
+                  "2px",
+                margin:
+                  "18px auto 20px",
+                background:
+                  "linear-gradient(90deg, transparent, #e4c865, transparent)",
+              }}
+            />
 
             <div
               style={{
                 fontSize:
-                  "20px",
+                  "clamp(22px, 2.1vw, 31px)",
+                fontWeight:
+                  900,
+                letterSpacing:
+                  "0.08em",
               }}
             >
-              出走予定{" "}
-              <strong>
+              まもなく発走
+            </div>
+
+            <div
+              style={{
+                marginTop:
+                  "16px",
+                display:
+                  "inline-flex",
+                alignItems:
+                  "center",
+                gap:
+                  "10px",
+                padding:
+                  "9px 20px",
+                borderRadius:
+                  "999px",
+                border:
+                  "1px solid rgba(255,255,255,0.20)",
+                background:
+                  "rgba(255,255,255,0.08)",
+                fontSize:
+                  "clamp(14px, 1.25vw, 19px)",
+                fontWeight:
+                  800,
+              }}
+            >
+              <span
+                style={{
+                  color:
+                    "rgba(255,255,255,0.68)",
+                }}
+              >
+                出走予定
+              </span>
+              <strong
+                style={{
+                  color:
+                    "#f0d470",
+                  fontSize:
+                    "1.22em",
+                }}
+              >
                 {horses.length}
               </strong>
-              頭
+              <span>頭</span>
             </div>
           </div>
         </div>
@@ -2841,7 +3251,7 @@ function GamePage() {
                 boxSizing:
                   "border-box",
                 padding:
-                  "30px 44px",
+                  "36px 56px",
                 textAlign:
                   "center",
                 borderRadius:
@@ -2868,7 +3278,7 @@ function GamePage() {
                     "0.08em",
                 }}
               >
-                🏁 FINAL RESULT
+                🏆 糸田杯  •  FINAL RESULT
               </div>
 
               {/* 1〜3位は縦に大きく表示 */}

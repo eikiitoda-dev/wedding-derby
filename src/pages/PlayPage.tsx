@@ -41,10 +41,12 @@ type RaceEvent = {
 
 
 const WHIP_POINT = 1;
-const BANANA_PENALTY = 30;
+const BANANA_PENALTY = 100;
 
 
 function PlayPage() {
+
+  // SCREEN_FIRST_BANANA_V1: バナナ中もスマホUIは通常のムチ表示のまま
 
   const { id } = useParams();
 
@@ -388,8 +390,7 @@ function PlayPage() {
         !raceStarted ||
         !player ||
         player.finished ||
-        pressing ||
-        raceEvent.type === "banana"
+        pressing
       ) {
         return;
       }
@@ -858,11 +859,9 @@ function PlayPage() {
   }
 
 
-  const bananaSeconds =
-    Math.max(
-      bananaRemaining / 1000,
-      0
-    ).toFixed(1);
+  // 残り時間はスマホには表示しない。
+  // 大スクリーンを見るゲーム性にするため、内部状態としてのみ保持する。
+  void bananaRemaining;
 
 
   return (
@@ -992,26 +991,6 @@ function PlayPage() {
           </div>
         }
 
-
-        {
-          bananaMessage === "avoided" &&
-
-          <div
-            style={{
-              margin: "0 0 14px",
-              padding: "12px",
-              borderRadius: "14px",
-              background: "#eaf7e9",
-              color: "#26752e",
-              fontSize: "17px",
-              fontWeight: 900,
-            }}
-          >
-            ✅ バナナ回避！
-          </div>
-        }
-
-
         {
           !raceStarted &&
 
@@ -1071,106 +1050,6 @@ function PlayPage() {
           <div>
 
             {
-              raceEvent.type === "banana"
-
-              ?
-
-              <div>
-
-                <div
-                  style={{
-                    marginBottom: "10px",
-                  }}
-                >
-                  <div
-                    style={{
-                      color: "#bd5300",
-                      fontSize: "12px",
-                      fontWeight: 900,
-                      letterSpacing: "0.12em",
-                    }}
-                  >
-                    CAUTION!
-                  </div>
-
-                  <h2
-                    style={{
-                      margin: "3px 0 0",
-                      color: "#8d3d00",
-                      fontSize: "25px",
-                      fontWeight: 900,
-                    }}
-                  >
-                    🍌 押さないで！
-                  </h2>
-                </div>
-
-
-                <button
-                  type="button"
-                  onClick={hitBanana}
-                  disabled={pressing}
-                  style={{
-                    width: "100%",
-                    minHeight: "230px",
-                    border: "5px solid #e1a900",
-                    borderRadius: "24px",
-                    background:
-                      "linear-gradient(180deg, #fff8b9, #ffd34d)",
-                    color: "#6e4200",
-                    boxShadow:
-                      "0 12px 28px rgba(131,85,0,0.24)",
-                    cursor: pressing
-                      ? "default"
-                      : "pointer",
-                    touchAction: "manipulation",
-                    WebkitTapHighlightColor: "transparent",
-                  }}
-                >
-
-                  <div
-                    style={{
-                      fontSize: "92px",
-                      lineHeight: 1,
-                    }}
-                  >
-                    🍌
-                  </div>
-
-                  <div
-                    style={{
-                      marginTop: "10px",
-                      fontSize: "22px",
-                      fontWeight: 900,
-                    }}
-                  >
-                    触ると -{BANANA_PENALTY}
-                  </div>
-
-                </button>
-
-
-                <div
-                  style={{
-                    marginTop: "13px",
-                    padding: "10px 12px",
-                    borderRadius: "13px",
-                    background: "#fff7e8",
-                    color: "#75501b",
-                    fontSize: "14px",
-                    lineHeight: 1.55,
-                    fontWeight: 800,
-                  }}
-                >
-                  あと <strong>{bananaSeconds}秒</strong>
-                  <br />
-                  何も押さずに待てば回避成功！
-                </div>
-
-              </div>
-
-              :
-
               <div>
 
                 <div
@@ -1204,7 +1083,7 @@ function PlayPage() {
 
                 <button
                   type="button"
-                  onClick={advanceHorse}
+                  onClick={raceEvent.type === "banana" ? hitBanana : advanceHorse}
                   disabled={pressing}
                   style={{
                     width: "100%",
@@ -1273,10 +1152,11 @@ function PlayPage() {
                 >
                   1回 +{WHIP_POINT}ポイント
                   <br />
-                  🍌 バナナに変わったら押さないで！
+                  バナナ対象卓は大スクリーンをチェック！
                 </p>
 
               </div>
+
 
             }
 

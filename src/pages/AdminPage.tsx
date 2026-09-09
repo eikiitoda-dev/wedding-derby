@@ -21,6 +21,8 @@ import "../styles/derby.css";
 
 function AdminPage() {
 
+  /* WEDDING_DERBY_SAFETY_V1 */
+
   const navigate =
     useNavigate();
 
@@ -34,6 +36,17 @@ function AdminPage() {
   const [
     resetting,
     setResetting,
+  ] = useState(false);
+
+  /*
+   * 本番事故防止：
+   * レース開始ボタンを押した瞬間にロックする。
+   * Firestore の raceStarted が反映されるまでの短い間に
+   * ダブルクリックされても raceId を作り直さない。
+   */
+  const [
+    startingRace,
+    setStartingRace,
   ] = useState(false);
 
   const [
@@ -124,6 +137,14 @@ useEffect(() => {
 
   async function handleStartRace() {
 
+    if (
+      startingRace ||
+      raceStarted ||
+      players.length === 0
+    ) {
+      return;
+    }
+
     const confirmed =
       window.confirm(
         "レースを開始しますか？"
@@ -136,6 +157,8 @@ useEffect(() => {
 
 
     try {
+
+      setStartingRace(true);
 
       await setRaceStarted(
         true
@@ -157,6 +180,8 @@ useEffect(() => {
       alert(
         "レース開始に失敗しました。"
       );
+
+      setStartingRace(false);
 
     }
 
@@ -801,7 +826,8 @@ useEffect(() => {
               type="button"
               disabled={
                 players.length === 0 ||
-                raceStarted
+                raceStarted ||
+                startingRace
               }
               onClick={
                 handleStartRace
@@ -817,12 +843,14 @@ useEffect(() => {
                   "18px",
                 background:
                   players.length > 0 &&
-                  !raceStarted
+                  !raceStarted &&
+                  !startingRace
                     ? "linear-gradient(135deg, #9c742f, #c7a65c)"
                     : "#d7d0c6",
                 color:
                   players.length > 0 &&
-                  !raceStarted
+                  !raceStarted &&
+                  !startingRace
                     ? "#ffffff"
                     : "#80776e",
                 fontSize:
@@ -831,17 +859,21 @@ useEffect(() => {
                   900,
                 boxShadow:
                   players.length > 0 &&
-                  !raceStarted
+                  !raceStarted &&
+                  !startingRace
                     ? "0 12px 26px rgba(137,101,43,0.26)"
                     : "none",
                 cursor:
                   players.length > 0 &&
-                  !raceStarted
+                  !raceStarted &&
+                  !startingRace
                     ? "pointer"
                     : "default",
               }}
             >
-              🏁 レース開始
+              {startingRace
+                ? "発走処理中…"
+                : "🏁 レース開始"}
             </button>
 
 

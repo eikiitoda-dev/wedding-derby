@@ -5,13 +5,10 @@ import {
 } from "react";
 
 import {
-  useNavigate,
-} from "react-router-dom";
-
-import {
   subscribePlayers,
   subscribeRaceStarted,
   setRaceStarted,
+  resetRaceOnly,
   resetGame,
   type Player,
 } from "../firebase/gameService";
@@ -21,10 +18,7 @@ import "../styles/derby.css";
 
 function AdminPage() {
 
-  /* WEDDING_DERBY_SAFETY_V1 */
-
-  const navigate =
-    useNavigate();
+  /* WEDDING_DERBY_ADMIN_STAY_AND_STOP_V2 */
 
 
   const [
@@ -50,6 +44,16 @@ function AdminPage() {
   ] = useState(false);
 
   const [
+    stoppingRace,
+    setStoppingRace,
+  ] = useState(false);
+
+  const [
+    preparingRerace,
+    setPreparingRerace,
+  ] = useState(false);
+
+  const [
     raceStarted,
     setRaceStartedState,
   ] = useState(false);
@@ -72,6 +76,12 @@ useEffect(() => {
         setRaceStartedState(
           started
         );
+
+        if (started) {
+          setStartingRace(false);
+        } else {
+          setStoppingRace(false);
+        }
       }
     );
 
@@ -165,9 +175,8 @@ useEffect(() => {
       );
 
 
-      navigate(
-        "/game"
-      );
+      // 管理画面は /admin に残す。
+      // 大スクリーン側の /game が Firestore の開始信号を受けて自動発走する。
 
 
     } catch (error) {
@@ -182,6 +191,106 @@ useEffect(() => {
       );
 
       setStartingRace(false);
+
+    }
+
+  }
+
+
+  /*
+   * レース緊急停止
+   * 参加者・ポイントは消さず、raceStarted だけ false に戻す。
+   */
+
+  async function handleStopRace() {
+
+    if (
+      stoppingRace ||
+      !raceStarted
+    ) {
+      return;
+    }
+
+    const confirmed =
+      window.confirm(
+        "レースを中止して待機状態に戻しますか？\n\n参加者・ポイントは削除されません。"
+      );
+
+    if (!confirmed) {
+      return;
+    }
+
+    try {
+
+      setStoppingRace(true);
+
+      await setRaceStarted(
+        false
+      );
+
+    } catch (error) {
+
+      console.error(
+        error
+      );
+
+      alert(
+        "レースの中止に失敗しました。"
+      );
+
+      setStoppingRace(false);
+
+    }
+
+  }
+
+
+  /*
+   * 再レース準備
+   * 参加者登録は残し、ポイント・ゴール状態・バナナ状態だけ初期化する。
+   */
+
+  async function handlePrepareRerace() {
+
+    if (
+      preparingRerace ||
+      players.length === 0
+    ) {
+      return;
+    }
+
+    const confirmed =
+      window.confirm(
+        "参加者を残したまま再レースの準備をしますか？\n\n全員のポイントを0に戻し、ゴール状態・バナナ状態も初期化します。\n参加者登録は削除されません。"
+      );
+
+    if (!confirmed) {
+      return;
+    }
+
+    try {
+
+      setPreparingRerace(true);
+
+      await resetRaceOnly();
+
+      alert(
+        "再レースの準備が完了しました。\n参加者はそのままで、ポイントは0に戻っています。"
+      );
+
+    } catch (error) {
+
+      console.error(
+        error
+      );
+
+      alert(
+        "再レースの準備に失敗しました。"
+      );
+
+    } finally {
+
+      setPreparingRerace(false);
 
     }
 
@@ -874,6 +983,148 @@ useEffect(() => {
               {startingRace
                 ? "発走処理中…"
                 : "🏁 レース開始"}
+            </button>
+
+
+            {
+              raceStarted && (
+                <div
+                  style={{
+                    display:
+                      "grid",
+                    gridTemplateColumns:
+                      "repeat(auto-fit, minmax(220px, 1fr))",
+                    gap:
+                      "10px",
+                  }}
+                >
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      window.open(
+                        "/game",
+                        "_blank",
+                        "noopener,noreferrer"
+                      );
+                    }}
+                    style={{
+                      width:
+                        "100%",
+                      minHeight:
+                        "54px",
+                      border:
+                        "1px solid #d7c28e",
+                      borderRadius:
+                        "16px",
+                      background:
+                        "#fffaf0",
+                      color:
+                        "#6f5022",
+                      fontSize:
+                        "15px",
+                      fontWeight:
+                        900,
+                      cursor:
+                        "pointer",
+                    }}
+                  >
+                    🖥 レース画面を開く
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={
+                      handleStopRace
+                    }
+                    disabled={
+                      stoppingRace
+                    }
+                    style={{
+                      width:
+                        "100%",
+                      minHeight:
+                        "54px",
+                      border:
+                        "1px solid #c98279",
+                      borderRadius:
+                        "16px",
+                      background:
+                        stoppingRace
+                          ? "#ddd5d3"
+                          : "#fff0ed",
+                      color:
+                        "#8a352e",
+                      fontSize:
+                        "15px",
+                      fontWeight:
+                        900,
+                      cursor:
+                        stoppingRace
+                          ? "default"
+                          : "pointer",
+                    }}
+                  >
+                    {
+                      stoppingRace
+                        ? "中止処理中…"
+                        : "⏹ レースを中止して待機状態に戻す"
+                    }
+                  </button>
+
+                </div>
+              )
+            }
+
+
+            <button
+              type="button"
+              onClick={
+                handlePrepareRerace
+              }
+              disabled={
+                players.length === 0 ||
+                raceStarted ||
+                preparingRerace
+              }
+              style={{
+                width:
+                  "100%",
+                minHeight:
+                  "56px",
+                border:
+                  "1px solid #d8c28d",
+                borderRadius:
+                  "16px",
+                background:
+                  players.length > 0 &&
+                  !raceStarted &&
+                  !preparingRerace
+                    ? "#fff8e8"
+                    : "#e4ded4",
+                color:
+                  players.length > 0 &&
+                  !raceStarted &&
+                  !preparingRerace
+                    ? "#775a24"
+                    : "#8a8178",
+                fontSize:
+                  "15px",
+                fontWeight:
+                  900,
+                cursor:
+                  players.length > 0 &&
+                  !raceStarted &&
+                  !preparingRerace
+                    ? "pointer"
+                    : "default",
+              }}
+            >
+              {
+                preparingRerace
+                  ? "再レース準備中…"
+                  : "↻ 参加者を残して再レース準備"
+              }
             </button>
 
 

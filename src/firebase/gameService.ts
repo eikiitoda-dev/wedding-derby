@@ -335,3 +335,63 @@ export async function resetGame() {
   );
 
 }
+
+/*
+ * 参加者を残したままレースだけリセット
+ * 再レース用
+ */
+export async function resetRaceOnly() {
+
+  await setDoc(
+    doc(
+      db,
+      "game",
+      "status"
+    ),
+    {
+      raceStarted: false,
+      raceId: 0,
+      eventType: "none",
+      eventId: 0,
+      eventExpiresAt: 0,
+    },
+    {
+      merge: true,
+    }
+  );
+
+
+  const snapshot =
+    await getDocs(
+      collection(
+        db,
+        "players"
+      )
+    );
+
+
+  await Promise.all(
+    snapshot.docs.map(
+      document =>
+        setDoc(
+          doc(
+            db,
+            "players",
+            document.id
+          ),
+          {
+            score: 0,
+            finished: false,
+            lastBananaEventId: 0,
+            eventType: "none",
+            eventId: 0,
+            eventExpiresAt: 0,
+          },
+          {
+            merge: true,
+          }
+        )
+    )
+  );
+
+}

@@ -2787,7 +2787,7 @@ function GamePage() {
             fontWeight: 900,
           }}
         >
-          💍 {eventInfo.title}
+          糸田杯
         </div>
 
         {(eventInfo.groom ||
@@ -2819,11 +2819,15 @@ function GamePage() {
           <div
             style={{
               position: "absolute",
-              inset: 0,
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
               zIndex: 45,
               display: "flex",
               alignItems: "center",
-              justifyContent: "center",
+              justifyContent: "flex-start",
+              paddingLeft: "calc(38% - 260px)",
               pointerEvents: "none",
               background: "rgba(0,0,0,0.18)",
             }}
@@ -2891,7 +2895,7 @@ function GamePage() {
             style={{
               position: "absolute",
               top: "18px",
-              left: "50%",
+              left: "38%",
               transform: "translateX(-50%)",
               zIndex: 34,
               width: "min(520px, 36vw)",
@@ -3026,7 +3030,7 @@ function GamePage() {
                   "#dfc36d",
               }}
             >
-              WEDDING DERBY
+              糸田杯
             </div>
 
             <div

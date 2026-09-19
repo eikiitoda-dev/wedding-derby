@@ -141,6 +141,38 @@ useEffect(() => {
     );
 
 
+  const registeredTableNumbers =
+    useMemo(
+      () =>
+        new Set(
+          players.map(
+            player =>
+              Number(
+                player.tableNumber
+              )
+          )
+        ),
+      [players]
+    );
+
+
+  const missingTableNumbers =
+    useMemo(
+      () =>
+        Array.from(
+          { length: 11 },
+          (_, index) =>
+            index + 1
+        ).filter(
+          tableNumber =>
+            !registeredTableNumbers.has(
+              tableNumber
+            )
+        ),
+      [registeredTableNumbers]
+    );
+
+
   /*
    * レース開始
    */
@@ -661,6 +693,46 @@ useEffect(() => {
 
                 )
                 : (
+                  <>
+
+                  <div
+                    style={{
+                      marginBottom:
+                        "14px",
+                      padding:
+                        "14px 16px",
+                      borderRadius:
+                        "16px",
+                      border:
+                        missingTableNumbers.length === 0
+                          ? "1px solid #b9d6bf"
+                          : "1px solid #e1b3a9",
+                      background:
+                        missingTableNumbers.length === 0
+                          ? "#f1f8f2"
+                          : "#fff3ef",
+                      color:
+                        missingTableNumbers.length === 0
+                          ? "#315f3a"
+                          : "#8a3f35",
+                      fontWeight:
+                        900,
+                      fontSize:
+                        "15px",
+                      textAlign:
+                        "center",
+                    }}
+                  >
+                    {
+                      missingTableNumbers.length === 0
+                        ? "✅ 全11卓 登録済み"
+                        : `⚠ 未登録：${missingTableNumbers.map(
+                            tableNumber =>
+                              `${tableNumber}卓`
+                          ).join("・")}`
+                    }
+                  </div>
+
 
                   <div
                     style={{
@@ -841,6 +913,7 @@ useEffect(() => {
 
                   </div>
 
+                  </>
                 )
             }
 

@@ -12,57 +12,57 @@ export const defaultHorses:
 
   {
     tableNumber: 1,
-    horseName: "サクラ",
+    horseName: "セツゼイ",
   },
 
   {
     tableNumber: 2,
-    horseName: "ブライダルスター",
+    horseName: "オラケタル",
   },
 
   {
     tableNumber: 3,
-    horseName: "ハナヨメ",
+    horseName: "ジリキオネガイシマス",
   },
 
   {
     tableNumber: 4,
-    horseName: "ゴールデンリング",
+    horseName: "オギノリミット",
   },
 
   {
     tableNumber: 5,
-    horseName: "ウエディングベル",
+    horseName: "ジンセイマラソン",
   },
 
   {
     tableNumber: 6,
-    horseName: "シンデレラ",
+    horseName: "タカフミサン",
   },
 
   {
     tableNumber: 7,
-    horseName: "ラブホース",
+    horseName: "イズナンセイセイ",
   },
 
   {
     tableNumber: 8,
-    horseName: "ハッピーラン",
+    horseName: "ザブルースカイ",
   },
 
   {
     tableNumber: 9,
-    horseName: "ダイヤモンド",
+    horseName: "マエシツレイシマス",
   },
 
   {
     tableNumber: 10,
-    horseName: "ブーケ",
+    horseName: "ゴーゴーデンパクン",
   },
 
   {
     tableNumber: 11,
-    horseName: "ゴールイン",
+    horseName: "バッテンヨカタイ",
   },
 
 ];

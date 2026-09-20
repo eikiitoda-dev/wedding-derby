@@ -21,6 +21,7 @@ import {
 } from "../firebase/gameService";
 
 import { db } from "../firebase";
+import { defaultHorses } from "../firebase/horses";
 
 type HorseData = {
   tableNumber: number;
@@ -1310,15 +1311,6 @@ function GamePage() {
 
       ctx.stroke();
 
-      const rankText =
-        rank === 1
-          ? "1位"
-          : rank === 2
-            ? "2位"
-            : rank === 3
-              ? "3位"
-              : `${rank}位`;
-
       const fontSize =
         Math.max(
           12,
@@ -1338,7 +1330,7 @@ function GamePage() {
         "middle";
 
       const prefix =
-        `${rankText}  ${horse.tableNumber} `;
+        `${horse.tableNumber} `;
 
       const originalName =
         horse.horseName ||
@@ -2936,15 +2928,28 @@ function GamePage() {
 
             <div
               style={{
-                marginTop: "0px",
-                fontSize: "clamp(42px, 3.8vw, 64px)",
-                lineHeight: 1,
+                marginTop: "2px",
+                fontSize:
+                  activeBananaTable &&
+                  (defaultHorses.find(
+                    (horse) =>
+                      horse.tableNumber === activeBananaTable
+                  )?.horseName.length ?? 0) >= 10
+                    ? "clamp(22px, 2.0vw, 32px)"
+                    : "clamp(28px, 2.7vw, 44px)",
+                lineHeight: 1.05,
                 fontWeight: 950,
                 color: "#ffffff",
                 textShadow: "0 5px 18px rgba(0,0,0,0.35)",
+                whiteSpace: "nowrap",
+                overflow: "hidden",
+                textOverflow: "clip",
               }}
             >
-              {activeBananaTable}卓
+              {defaultHorses.find(
+                (horse) =>
+                  horse.tableNumber === activeBananaTable
+              )?.horseName ?? `${activeBananaTable}卓`}
             </div>
 
             <div
